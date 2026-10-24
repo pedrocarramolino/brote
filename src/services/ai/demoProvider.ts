@@ -4,7 +4,7 @@ import { n0, normalize } from '../../lib/format';
 import { allFoods, allRecipes, getRecipe, SLOT_META } from '../catalog';
 import { plannedMealNutrition, plannedMealsFor, recipeFit, recipeNutrition } from '../nutrition';
 import { buildShoppingList } from '../shopping';
-import { dayHabits } from '../habits';
+import { dayHabits, trackingStart } from '../habits';
 import { findAlternatives } from '../substitutions';
 import type { AIProvider } from './types';
 
@@ -121,7 +121,8 @@ function answer(text: string, data: AppData): string {
   // 5. Resumen de la semana
   if (/(resum|cumpl|semana|como voy|progreso)/.test(t)) {
     const monday = startOfWeek(today);
-    const days = weekDates(monday).filter((d) => d <= today);
+    const start = trackingStart(data);
+    const days = weekDates(monday).filter((d) => d <= today && d >= start);
     let done = 0;
     let planned = 0;
     let skipped = 0;

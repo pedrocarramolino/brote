@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import { Footprints, Info, List, ListChecks, Plus, Ruler, Scale, Timer, Utensils } from 'lucide-react';
 import type { MeasurementEntry, WeightEntry } from '../types';
 import { PageHeader } from '../components/layout/AppShell';
@@ -6,7 +7,7 @@ import { Button, Card, DemoBadge, EmptyState, Segmented, cx } from '../component
 import { useData } from '../store/AppStore';
 import { addDays, formatDate, formatShort, formatWeekdayNarrow, rangeDays, startOfWeek, todayISO } from '../lib/dates';
 import { n0, n1 } from '../lib/format';
-import { dayHabits, mealAdherence } from '../services/habits';
+import { dayHabits, mealAdherence, trackingStart } from '../services/habits';
 import { HABIT_ICONS } from '../components/ui/icons';
 import { Bars, TrendLine, type Point } from '../features/progress/Charts';
 import { MeasurementSheet, MEASURES, RecordsSheet, WeightSheet } from '../features/progress/EntrySheets';
@@ -52,6 +53,7 @@ export function ProgressPage() {
   const data = useData();
   const today = todayISO();
   const [period, setPeriod] = useState<Period>('30');
+  const narrow = useMediaQuery('(max-width: 479px)');
   const days = Number(period);
   const from = addDays(today, -(days - 1));
   const range = rangeDays(from, today);
@@ -82,9 +84,12 @@ export function ProgressPage() {
   const lastW = weights[weights.length - 1];
 
   // Cumplimiento y hábitos
-  const adherence = series((d) => mealAdherence(data, d));
-  const advVals = range.map((d) => mealAdherence(data, d)).filter((v): v is number => v !== null);
-  const habitPct = series((d) => (d <= today ? dayHabits(data, d).pct : null));
+  // Solo cuentan los días desde que empezó el seguimiento (no se penalizan días anteriores al alta)
+  const start = trackingStart(data);
+  const adh = (d: string) => (d < start || d > today ? null : mealAdherence(data, d));
+  const adherence = series(adh);
+  const advVals = range.map(adh).filter((v): v is number => v !== null);
+  const habitPct = series((d) => (d < start || d > today ? null : dayHabits(data, d).pct));
 
   // Pasos
   const stepsMap = new Map(data.steps.map((s) => [s.date, s.steps]));
@@ -101,12 +106,12 @@ export function ProgressPage() {
   // Semana actual frente a la anterior
   const thisMon = startOfWeek(today);
   const cmp = (fromD: string, toD: string) => {
-    const ds = rangeDays(fromD, toD);
-    const adh = ds.map((d) => mealAdherence(data, d)).filter((v): v is number => v !== null);
+    const ds = fromD > toD ? [] : rangeDays(fromD < start ? start : fromD, toD);
+    const ad = ds.map((d) => mealAdherence(data, d)).filter((v): v is number => v !== null);
     const st = ds.map((d) => stepsMap.get(d)).filter((v): v is number => v !== undefined);
     return {
-      adh: adh.length ? Math.round(avg(adh)) : null,
-      habits: Math.round(avg(ds.map((d) => dayHabits(data, d).pct))),
+      adh: ad.length ? Math.round(avg(ad)) : null,
+      habits: ds.length ? Math.round(avg(ds.map((d) => dayHabits(data, d).pct))) : null,
       steps: st.length ? Math.round(avg(st)) : null,
       minutes: data.sessions.filter((s) => s.date >= fromD && s.date <= toD).reduce((a, s) => a + s.minutes, 0),
     };
@@ -120,7 +125,8 @@ export function ProgressPage() {
   const demoWeights = wInRange.some((w) => w.demo);
   const latestM = [...data.measurements].sort((a, b) => b.date.localeCompare(a.date));
   const habits = data.habits.filter((h) => h.active);
-  const gridDays = rangeDays(addDays(today, -Math.min(days, 28) + 1), today);
+  const gridSpan = narrow ? 14 : 28;
+  const gridDays = rangeDays(addDays(today, -Math.min(days, gridSpan) + 1), today);
 
   return (
     <>
@@ -133,16 +139,16 @@ export function ProgressPage() {
         <h2 className="mb-3 text-[17px] font-bold">Esta semana <span className="font-medium text-ink3">· frente a la anterior</span></h2>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Stat label="Plan cumplido" value={cur.adh !== null ? `${cur.adh} %` : '—'} sub={prev.adh !== null ? `Anterior: ${prev.adh} %` : undefined} />
-          <Stat label="Hábitos" value={`${cur.habits} %`} sub={`Anterior: ${prev.habits} %`} />
+          <Stat label="Hábitos" value={cur.habits !== null ? `${cur.habits} %` : '—'} sub={prev.habits !== null ? `Anterior: ${prev.habits} %` : undefined} />
           <Stat label="Pasos / día" value={cur.steps !== null ? n0(cur.steps) : '—'} sub={prev.steps !== null ? `Anterior: ${n0(prev.steps)}` : undefined} />
-          <Stat label="Minutos activos" value={n0(cur.minutes)} sub={`Anterior: ${n0(prev.minutes)}`} />
+          <Stat label="Minutos activos" value={n0(cur.minutes)} sub={prev.habits !== null ? `Anterior: ${n0(prev.minutes)}` : undefined} />
         </div>
         <p className="mt-4 border-t border-line/60 pt-3 text-[13px] text-ink2">
-          En lo que va de mes: plan cumplido {month.adh ?? '—'} % · hábitos {month.habits} % · {n0(month.minutes)} min de actividad.
+          En lo que va de mes: plan cumplido {month.adh !== null ? `${month.adh} %` : '—'} · hábitos {month.habits !== null ? `${month.habits} %` : '—'} · {n0(month.minutes)} min de actividad.
         </p>
       </Card>
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {/* Peso */}
         <ChartCard
           title="Peso"
@@ -150,12 +156,12 @@ export function ProgressPage() {
           demo={demoWeights}
           aside={<Button size="sm" variant="tinted" icon={<Plus size={16} />} onClick={() => setWeightSheet({ entry: null })}>Registrar</Button>}
           footer={
-            <div className="flex items-start justify-between gap-3">
-              <p className="flex items-start gap-1.5 text-[12px] leading-snug text-ink3">
+            <div className="flex flex-col gap-2 xs:flex-row xs:items-start xs:justify-between xs:gap-3">
+              <p className="flex min-w-0 items-start gap-1.5 text-[12px] leading-snug text-ink3">
                 <Info size={14} className="mt-[1px] shrink-0" />
                 El peso refleja agua, digestión y masa muscular, no solo grasa. Fíjate en la tendencia, no en un día suelto.
               </p>
-              <Button size="sm" variant="ghost" icon={<List size={16} />} onClick={() => setRecords('peso')}>Registros</Button>
+              {weights.length > 0 && <Button size="sm" variant="ghost" className="self-start" icon={<List size={16} />} onClick={() => setRecords('peso')}>Registros</Button>}
             </div>
           }
         >
@@ -215,22 +221,22 @@ export function ProgressPage() {
         {/* Consistencia de hábitos */}
         <ChartCard title="Consistencia de hábitos" icon={<ListChecks size={18} />} demo={data.isDemo}>
           <div className="no-scrollbar overflow-x-auto">
-            <table className="w-full border-separate border-spacing-[3px] text-[12px]">
+            <table className="w-full table-fixed border-separate border-spacing-[3px] text-[12px]">
               <caption className="sr-only">Hábitos cumplidos en los últimos {gridDays.length} días</caption>
               <tbody>
                 {habits.map((h) => {
                   const Icon = HABIT_ICONS[h.icon];
                   return (
                     <tr key={h.id}>
-                      <th scope="row" className="pr-2 text-left font-medium text-ink2">
+                      <th scope="row" className="w-7 pr-1 text-left font-medium text-ink2 sm:w-44 sm:pr-2">
                         <span className="flex items-center gap-1.5 whitespace-nowrap"><Icon size={14} /> <span className="hidden sm:inline">{h.name}</span></span>
                       </th>
                       {gridDays.map((d) => {
                         const s = dayHabits(data, d).states.find((x) => x.habit.id === h.id);
-                        const state = !s || !s.applicable ? 'na' : s.done ? 'ok' : 'no';
+                        const state = d < start || !s || !s.applicable ? 'na' : s.done ? 'ok' : 'no';
                         return (
                           <td key={d} title={`${h.name} · ${formatDate(d)}: ${state === 'ok' ? 'hecho' : state === 'na' ? 'no aplica' : 'no hecho'}`}>
-                            <span className={cx('block h-3.5 w-full min-w-[8px] rounded-[4px]', state === 'ok' ? 'bg-accent' : state === 'na' ? 'bg-transparent ring-1 ring-inset ring-line' : 'bg-surface2')} />
+                            <span className={cx('block h-3.5 w-full rounded-[4px]', state === 'ok' ? 'bg-accent' : state === 'na' ? 'bg-transparent ring-1 ring-inset ring-line' : 'bg-surface2')} />
                           </td>
                         );
                       })}

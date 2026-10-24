@@ -35,14 +35,15 @@ export function RecipeCover({ recipe, size = 56, className, rounded = 'rounded-[
 
 export function MacroInline({ m, className }: { m: Macros; className?: string }) {
   return (
-    <span className={cx('tabular text-[13px] text-ink2', className)}>
-      <span className="font-semibold text-ink">{n0(m.kcal)} kcal</span>
-      <span className="mx-1.5 text-line">·</span>
-      <span className="text-protein">P {n0(m.protein)}</span>
-      <span className="mx-1 text-line">·</span>
-      <span className="text-carbs">H {n0(m.carbs)}</span>
-      <span className="mx-1 text-line">·</span>
-      <span className="text-fat">G {n0(m.fat)}</span>
+    <span className={cx('tabular flex flex-wrap items-baseline gap-x-2 text-[13px] leading-snug text-ink2', className)}>
+      <span className="whitespace-nowrap font-semibold text-ink">{n0(m.kcal)} kcal</span>
+      <span className="whitespace-nowrap">
+        <span className="text-protein">P {n0(m.protein)}</span>
+        <span className="mx-1 text-ink3" aria-hidden="true">·</span>
+        <span className="text-carbs">H {n0(m.carbs)}</span>
+        <span className="mx-1 text-ink3" aria-hidden="true">·</span>
+        <span className="text-fat">G {n0(m.fat)}</span>
+      </span>
     </span>
   );
 }

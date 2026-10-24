@@ -4,6 +4,7 @@ export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
+      screens: { xs: '400px' },
       colors: {
         bg: v('bg'),
         surface: v('surface'),

@@ -126,7 +126,7 @@ export function PlanPage({ dateParam }: { dateParam: string | null }) {
                             {SLOT_META[slot].label} · {data.profile.schedule[slot] ?? SLOT_META[slot].time}
                           </span>
                           <span className="mt-0.5 block text-[16px] font-semibold leading-snug">{r?.name ?? m.customName}</span>
-                          {n ? <MacroInline m={n} className="mt-0.5 block truncate" /> : <span className="mt-0.5 block text-[13px] text-warn">Sin valores verificados</span>}
+                          {n ? <MacroInline m={n} className="mt-0.5" /> : <span className="mt-0.5 block text-[13px] text-warn">Sin valores verificados</span>}
                         </span>
                       </button>
                       <div className="flex shrink-0 flex-col items-center gap-1 sm:flex-row sm:gap-2">

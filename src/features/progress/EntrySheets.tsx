@@ -106,7 +106,7 @@ export function MeasurementSheet({ open, onClose, entry }: { open: boolean; onCl
 
   return (
     <Sheet open={open} onClose={onClose} title={entry ? 'Editar medidas' : 'Registrar medidas'} footer={<Button size="lg" onClick={save}>Guardar</Button>}>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 xs:grid-cols-2">
         {MEASURES.map(([k, label], i) => (
           <TextField key={k} label={label} inputMode="decimal" suffix="cm" value={v[k] ?? ''} onChange={(e) => setV((x) => ({ ...x, [k]: e.target.value }))} error={err[k]} {...(i === 0 ? { 'data-autofocus': true } : {})} />
         ))}

@@ -26,24 +26,34 @@ export const emptyOverrides = (): ShoppingOverrides => ({ checked: {}, qty: {}, 
 
 const COUNTABLE = /(unidad|mediano|mediana|filete|lomo|lata|bote|bandeja|bloque)/i;
 
+/** Plural de cada palabra en español (unidad → unidades, bote escurrido → botes escurridos). */
+function pluralize(label: string): string {
+  return label
+    .split(' ')
+    .map((w) => (/[aeiouáéó]$/i.test(w) ? `${w}s` : /[dlnrzj]$/i.test(w) ? `${w}es` : w))
+    .join(' ');
+}
+
+/**
+ * Cantidad en g/ml y, si la ración típica es una pieza contable, su equivalencia aproximada.
+ * La etiqueta de ración puede llevar fracción («1/4 bote» = 100 g → 1 bote = 400 g) o
+ * varias piezas («2 unidades» = 20 g → 1 unidad = 10 g).
+ */
 export function formatAmount(food: Food, amount: number): string {
   let main: string;
   if (food.unit === 'g') main = amount >= 1000 ? `${n1(amount / 1000)} kg` : `${n0(Math.ceil(amount / 5) * 5)} g`;
   else main = amount >= 1000 ? `${n1(amount / 1000)} l` : `${n0(Math.ceil(amount / 10) * 10)} ml`;
   const p = food.portion;
-  if (p && COUNTABLE.test(p.label) && p.amount > 0) {
-    const count = Math.max(1, Math.round((amount / p.amount) * 2) / 2);
-    const label = p.label.replace(/^1(\/2)?\s*/, '').replace(/\s*\(.*\)/, '');
-    main += ` · ≈ ${n1(count)} ${count === 1 ? label : pluralize(label)}`;
+  const m = p?.label.match(/^(\d+)(?:\/(\d+))?\s+(.+)$/);
+  if (p && m && COUNTABLE.test(m[3]) && p.amount > 0) {
+    const pieces = Number(m[1]) / (m[2] ? Number(m[2]) : 1);
+    const unitSize = p.amount / pieces;
+    let noun = m[3].replace(/\s*\(.*\)/, '').trim();
+    if (pieces > 1) noun = noun.replace(/^unidades\b/, 'unidad');
+    const count = Math.max(0.5, Math.round((amount / unitSize) * 2) / 2);
+    main += ` · ≈ ${n1(count)} ${count <= 1 ? noun : pluralize(noun)}`;
   }
   return main;
-}
-
-function pluralize(label: string): string {
-  return label
-    .split(' ')
-    .map((w, i) => (i === 0 ? (/[aeiou]$/.test(w) ? `${w}s` : /n$/.test(w) ? `${w}es` : w) : w))
-    .join(' ');
 }
 
 /** Lista generada a partir del menú semanal + cambios manuales conservados. */

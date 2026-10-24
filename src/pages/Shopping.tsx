@@ -106,7 +106,7 @@ export function ShoppingPage({ weekParam }: { weekParam: string | null }) {
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0 lg:order-2">
           <Card className="p-4 lg:sticky lg:top-6">
             <div className="flex items-center justify-between gap-2">

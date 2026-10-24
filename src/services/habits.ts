@@ -1,5 +1,5 @@
 import type { AppData, Habit, ISODate } from '../types';
-import { weekdayIndex } from '../lib/dates';
+import { toISO, weekdayIndex } from '../lib/dates';
 import { plannedMealsFor } from './nutrition';
 
 export interface HabitState {
@@ -62,4 +62,18 @@ export function mealAdherence(data: AppData, date: ISODate): number | null {
   const meals = plannedMealsFor(data, date).filter((m) => data.profile.mealSlots.includes(m.slot));
   if (!meals.length) return null;
   return Math.round((meals.filter((m) => m.status === 'hecha').length / meals.length) * 100);
+}
+
+/**
+ * Primer día con seguimiento: la fecha de alta o, si hay registros anteriores
+ * (por ejemplo, datos importados o de demostración), el registro más antiguo.
+ * Los días previos no cuentan como «incumplidos» en Progreso.
+ */
+export function trackingStart(data: AppData): ISODate {
+  const created = data.profile.createdAt ? toISO(new Date(data.profile.createdAt)) : '9999-12-31';
+  const dates: ISODate[] = [created];
+  const firstOf = (xs: { date: ISODate }[]) => xs.reduce<ISODate | null>((m, x) => (!m || x.date < m ? x.date : m), null);
+  for (const d of [firstOf(data.log), firstOf(data.weights), firstOf(data.steps), firstOf(data.sessions), firstOf(data.habitLogs)]) if (d) dates.push(d);
+  for (const week of Object.values(data.plan)) for (const m of week) if (m.status !== 'pendiente') dates.push(m.date);
+  return dates.reduce((a, b) => (b < a ? b : a));
 }

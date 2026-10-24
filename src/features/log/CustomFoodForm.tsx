@@ -52,7 +52,7 @@ export function CustomFoodForm({ onSaved, onCancel }: { onSaved: (f: Food) => vo
         <p className="mb-1.5 text-[14px] font-semibold text-ink2">Valores por cada 100</p>
         <Segmented label="Unidad" value={unit} onChange={setUnit} options={[{ value: 'g', label: 'gramos' }, { value: 'ml', label: 'mililitros' }]} />
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 xs:grid-cols-2">
         <TextField label="Energía" inputMode="decimal" suffix="kcal" value={v.kcal} onChange={set('kcal')} error={errors.kcal} />
         <TextField label="Proteínas" inputMode="decimal" suffix="g" value={v.protein} onChange={set('protein')} error={errors.protein} />
         <TextField label="Hidratos" inputMode="decimal" suffix="g" value={v.carbs} onChange={set('carbs')} error={errors.carbs} />

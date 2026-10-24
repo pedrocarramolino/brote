@@ -169,8 +169,8 @@ export function ProfilePage({ section }: { section: string | null }) {
           {ALL_SLOTS.map((s) => {
             const on = p.mealSlots.includes(s);
             return (
-              <li key={s} className="flex min-h-[56px] items-center gap-3 py-1">
-                <span className="flex-1 text-[16px] font-medium">{SLOT_META[s].label}</span>
+              <li key={s} className="flex min-h-[56px] items-center gap-2 py-1 xs:gap-3">
+                <span className="min-w-0 flex-1 text-[16px] font-medium">{SLOT_META[s].label}</span>
                 <label className="sr-only" htmlFor={`time-${s}`}>Hora de {SLOT_META[s].label}</label>
                 <input
                   id={`time-${s}`}
@@ -178,7 +178,7 @@ export function ProfilePage({ section }: { section: string | null }) {
                   value={p.schedule[s] ?? SLOT_META[s].time}
                   disabled={!on}
                   onChange={(e) => e.target.value && set('schedule', { ...p.schedule, [s]: e.target.value })}
-                  className="tabular h-10 rounded-[10px] bg-surface2 px-2 text-[16px] disabled:opacity-40"
+                  className="tabular h-10 w-[104px] shrink-0 rounded-[10px] bg-surface2 px-2 text-[16px] disabled:opacity-40"
                 />
                 <Toggle
                   hideLabel
@@ -372,7 +372,7 @@ function TargetsSection() {
         Si tienes un objetivo de peso, una condición de salud, estás embarazada o en periodo de lactancia, o haces deporte de competición, define estos valores con un dietista-nutricionista.
       </div>
       {t.origin === 'demo' && <Badge tone="warn" className="mb-3">Valores de demostración</Badge>}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 xs:grid-cols-2">
         <TextField label="Energía" inputMode="numeric" suffix="kcal" value={v.kcal} onChange={(e) => setV({ ...v, kcal: e.target.value })} error={err.kcal} placeholder="Opcional" />
         <TextField label="Proteínas" inputMode="numeric" suffix="g" value={v.protein} onChange={(e) => setV({ ...v, protein: e.target.value })} error={err.protein} placeholder="Opcional" />
         <TextField label="Hidratos" inputMode="numeric" suffix="g" value={v.carbs} onChange={(e) => setV({ ...v, carbs: e.target.value })} error={err.carbs} placeholder="Opcional" />

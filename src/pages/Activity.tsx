@@ -53,7 +53,7 @@ export function ActivityPage({ weekParam }: { weekParam: string | null }) {
         <IconButton label="Semana siguiente" onClick={() => navigate('actividad', { w: addDays(monday, 7) })}><ChevronRight size={20} /></IconButton>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">
           <ul className="space-y-2">
             {weekDates(monday).map((d) => {

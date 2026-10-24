@@ -3,7 +3,7 @@ import { addDays, startOfWeek, weekDates } from '../../lib/dates';
 import { getRecipe, SLOT_META } from '../catalog';
 import { dayTotals, plannedMealNutrition, plannedMealsFor, round } from '../nutrition';
 import { buildShoppingList } from '../shopping';
-import { dayHabits, mealAdherence } from '../habits';
+import { dayHabits, mealAdherence, trackingStart } from '../habits';
 import { ALLERGEN_LABELS } from '../../data/foods';
 
 /**
@@ -45,7 +45,8 @@ export function buildAssistantContext(data: AppData, today: ISODate): AssistantC
   if (!data.profile.shareContextWithAI) return { shared: false, today };
   const p = data.profile;
   const monday = startOfWeek(today);
-  const days = weekDates(monday).filter((d) => d <= today);
+  const start = trackingStart(data);
+  const days = weekDates(monday).filter((d) => d <= today && d >= start);
   let mealsDone = 0;
   let mealsPlanned = 0;
   let habitsSum = 0;

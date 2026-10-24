@@ -28,7 +28,7 @@ export function TrendLine({ data, unit, digits = 1, height = 200, domainPad = 1 
   const min = Math.floor(Math.min(...vals) - domainPad);
   const max = Math.ceil(Math.max(...vals) + domainPad);
   return (
-    <div style={{ height }} className="-ml-2">
+    <div style={{ height }} className="-ml-2 min-w-0" data-no-swipe>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid vertical={false} stroke="rgb(var(--line))" strokeOpacity={0.6} />
@@ -45,7 +45,7 @@ export function TrendLine({ data, unit, digits = 1, height = 200, domainPad = 1 
 /** Barras finas con extremo redondeado y línea de objetivo opcional. */
 export function Bars({ data, unit, target, max, height = 180, digits = 0, targetLabel }: { data: Point[]; unit: string; target?: number; max?: number; height?: number; digits?: number; targetLabel?: string }) {
   return (
-    <div style={{ height }} className="-ml-2">
+    <div style={{ height }} className="-ml-2 min-w-0" data-no-swipe>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} barCategoryGap="28%">
           <CartesianGrid vertical={false} stroke="rgb(var(--line))" strokeOpacity={0.6} />

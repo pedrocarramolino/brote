@@ -26,11 +26,31 @@ export function useHashRouter() {
   return loc;
 }
 
-export function navigate(route: Route, params?: Record<string, string>) {
+/**
+ * Navegación interna. Por defecto REEMPLAZA la entrada del historial en lugar de añadir una:
+ * las pestañas de una app no forman una pila de «atrás». Así el gesto atrás del navegador
+ * (borde izquierdo en Safari, gesto del trackpad) no recorre las secciones visitadas.
+ */
+export function navigate(route: Route, params?: Record<string, string>, opts: { push?: boolean } = {}) {
   const q = params ? `?${new URLSearchParams(params).toString()}` : '';
   const next = `#/${route}${q}`;
-  if (window.location.hash !== next) window.location.hash = next;
+  if (window.location.hash === next) return;
+  if (opts.push) {
+    window.location.hash = next;
+    return;
+  }
+  try {
+    history.replaceState(history.state, '', next);
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+  } catch {
+    window.location.hash = next;
+  }
 }
+
+/** Orden de las categorías principales para la navegación por gestos. */
+export const TAB_ORDER: Route[] = ['hoy', 'plan', 'progreso', 'compra', 'perfil'];
+/** Asistente y Actividad cuelgan de Perfil en la barra inferior. */
+export const tabOf = (r: Route): Route => (r === 'asistente' || r === 'actividad' ? 'perfil' : r);
 
 export function useNavigate() {
   return useCallback(navigate, []);

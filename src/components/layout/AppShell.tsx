@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { Activity, CalendarDays, ChartLine, House, ShoppingBasket, Sparkles, UserRound, type LucideIcon } from 'lucide-react';
-import { navigate, type Route } from '../../lib/router';
+import { navigate, tabOf, type Route } from '../../lib/router';
+import { useSwipeTabs } from '../../hooks/useSwipeTabs';
 import { cx } from '../ui/primitives';
 import { useStore } from '../../store/AppStore';
 import { Logo } from './Logo';
@@ -19,10 +20,13 @@ const SECONDARY: { route: Route; label: string; icon: LucideIcon }[] = [
 ];
 
 /** En móvil, Asistente y Actividad cuelgan de Perfil; en la barra se resalta Perfil. */
-const tabFor = (r: Route): Route => (r === 'asistente' || r === 'actividad' ? 'perfil' : r);
+const tabFor = tabOf;
 
 export function AppShell({ route, children }: { route: Route; children: ReactNode }) {
   const { data } = useStore();
+  const mainRef = useRef<HTMLElement>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
+  useSwipeTabs(mainRef, pageRef, route);
   return (
     <div className="min-h-dvh lg:flex">
       {/* Barra lateral (escritorio y iPad horizontal) */}
@@ -49,14 +53,17 @@ export function AppShell({ route, children }: { route: Route; children: ReactNod
         </div>
       </aside>
 
-      <main id="contenido" className="min-w-0 flex-1 pb-[calc(84px+env(safe-area-inset-bottom))] lg:pb-10">
-        <div key={route} className="anim-page mx-auto w-full max-w-[1120px] px-4 pt-[max(16px,env(safe-area-inset-top))] sm:px-6 lg:px-10 lg:pt-8">
+      <main ref={mainRef} id="contenido" className="min-w-0 flex-1 touch-pan-y pb-[calc(84px+env(safe-area-inset-bottom))] lg:pb-10">
+        <div ref={pageRef} key={route} className="anim-page mx-auto w-full min-w-0 max-w-[1120px] pl-[max(16px,env(safe-area-inset-left))] pr-[max(16px,env(safe-area-inset-right))] pt-[max(16px,env(safe-area-inset-top))] sm:pl-[max(24px,env(safe-area-inset-left))] sm:pr-[max(24px,env(safe-area-inset-right))] lg:px-10 lg:pt-8">
           {children}
         </div>
       </main>
 
       {/* Barra de pestañas (móvil y tableta vertical) */}
-      <nav aria-label="Secciones principales" className="material-bar safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line/70 lg:hidden">
+      {/* Franja opaca bajo la barra de estado: el contenido no se desliza por detrás del notch */}
+      <div aria-hidden="true" className="pointer-events-none fixed inset-x-0 top-0 z-30 h-[env(safe-area-inset-top)] bg-bg lg:hidden" />
+
+      <nav aria-label="Secciones principales" className="material-bar safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-line/70 pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] lg:hidden">
         <ul className="mx-auto flex max-w-xl">
           {PRIMARY.map(({ route: r, label, icon: Icon }) => {
             const active = tabFor(route) === r;

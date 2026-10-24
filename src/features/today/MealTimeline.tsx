@@ -85,7 +85,7 @@ export function MealTimeline({ date, meals, onOpenRecipe, onSwap, onAddFood, onE
                           {recipe?.name ?? meal.customName ?? 'Plato sin receta'}
                         </span>
                         {n ? (
-                          <MacroInline m={n} className="mt-0.5 block truncate" />
+                          <MacroInline m={n} className="mt-0.5" />
                         ) : (
                           <span className="mt-0.5 block text-[13px] text-warn">Sin valores nutricionales verificados</span>
                         )}

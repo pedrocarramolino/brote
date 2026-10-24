@@ -5,7 +5,7 @@ import { PageHeader } from '../components/layout/AppShell';
 import { Card, IconButton, ProgressBar, SectionTitle } from '../components/ui/primitives';
 import { DemoBanner } from '../components/DemoBanner';
 import { useData, useWeek } from '../store/AppStore';
-import { addDays, formatDate, formatLong, greeting, startOfWeek, todayISO, weekdayIndex } from '../lib/dates';
+import { addDays, formatDate, formatLong, formatShort, formatWeekdayShort, greeting, startOfWeek, todayISO, weekdayIndex } from '../lib/dates';
 import { n0, n1 } from '../lib/format';
 import { navigate } from '../lib/router';
 import { getRecipe, SLOT_META, slotsOrdered } from '../services/catalog';
@@ -64,11 +64,11 @@ export function TodayPage({ dateParam }: { dateParam: string | null }) {
     <>
       <PageHeader
         eyebrow={
-          <span className="inline-flex items-center gap-0.5">
+          <span className="inline-flex flex-wrap items-center gap-0.5">
             <IconButton label="Día anterior" className="!-ml-3 !h-9 !w-9" onClick={() => goDay(addDays(date, -1))}>
               <ChevronLeft size={18} />
             </IconButton>
-            <span aria-live="polite">{formatLong(date)}</span>
+            <span aria-live="polite" className="whitespace-nowrap"><span className="xs:hidden">{formatWeekdayShort(date)}, {formatShort(date)}</span><span className="hidden xs:inline">{formatLong(date)}</span></span>
             <IconButton label="Día siguiente" className="!h-9 !w-9" onClick={() => goDay(addDays(date, 1))}>
               <ChevronRight size={18} />
             </IconButton>
@@ -94,7 +94,7 @@ export function TodayPage({ dateParam }: { dateParam: string | null }) {
 
       <DemoBanner />
 
-      <div className="grid gap-x-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid grid-cols-1 gap-x-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0">
           <NutritionSummary totals={totals} targets={data.profile.targets} />
 
@@ -123,7 +123,7 @@ export function TodayPage({ dateParam }: { dateParam: string | null }) {
           </div>
 
           <SectionTitle>Actividad</SectionTitle>
-          <div className="grid grid-cols-2 gap-3 xl:grid-cols-1">
+          <div className="grid grid-cols-1 gap-3 xs:grid-cols-2 xl:grid-cols-1">
             <Card as="div" className="p-0">
               <button type="button" onClick={() => setStepsOpen(true)} className="w-full rounded-xl2 p-4 text-left hover:bg-surface2/40">
                 <div className="mb-2 flex items-center gap-2 text-[13px] font-semibold text-ink2"><Footprints size={16} /> Pasos</div>
@@ -156,7 +156,7 @@ export function TodayPage({ dateParam }: { dateParam: string | null }) {
                 )}
               </button>
             </Card>
-            <Card as="div" className="col-span-2 p-0 xl:col-span-1">
+            <Card as="div" className="p-0 xs:col-span-2 xl:col-span-1">
               <button type="button" onClick={() => navigate('progreso')} className="flex w-full items-center gap-3 rounded-xl2 p-4 text-left hover:bg-surface2/40">
                 <span className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-surface2 text-ink2"><Scale size={19} /></span>
                 <span className="min-w-0 flex-1">
