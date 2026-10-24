@@ -1,0 +1,206 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ------------------------------------------------------------------
+   Tokens de color (RGB sin alfa para poder usar /opacidad en Tailwind).
+   Contraste comprobado: ink-2 sobre surface 6,6:1 · ink-3 4,97:1 ·
+   accent sobre blanco 5,0:1 · blanco sobre accent 5,0:1.
+   Se sigue la apariencia del sistema (claro/oscuro), sin interruptor propio.
+------------------------------------------------------------------- */
+:root {
+  --bg: 244 245 241;
+  --surface: 255 255 255;
+  --surface-2: 238 240 235;
+  --line: 222 225 218;
+  --ink: 26 29 24;
+  --ink-2: 88 95 84;
+  --ink-3: 107 114 103;
+  --accent: 47 125 80;
+  --accent-ink: 255 255 255;
+  --accent-soft: 228 241 232;
+  --accent-deep: 36 102 64;
+  --protein: 180 83 47;
+  --carbs: 58 109 176;
+  --fat: 143 106 18;
+  --warn: 150 92 0;
+  --warn-soft: 252 242 222;
+  --danger: 192 44 38;
+  --raised: 255 255 255;
+  --switch-off: 228 231 224;
+  --switch-edge: 133 140 129;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: 0 0 0;
+    --surface: 28 28 30;
+    --surface-2: 44 44 46;
+    --line: 56 56 58;
+    --ink: 242 243 240;
+    --ink-2: 170 175 166;
+    --ink-3: 143 148 137;
+    --accent: 92 184 128;
+    --accent-ink: 6 30 16;
+    --accent-soft: 24 50 34;
+    --accent-deep: 120 205 150;
+    --protein: 236 135 103;
+    --carbs: 110 160 230;
+    --fat: 222 180 80;
+    --warn: 240 175 70;
+    --warn-soft: 56 42 14;
+    --danger: 255 105 97;
+    color-scheme: dark;
+    --raised: 99 99 102;
+    --switch-off: 58 58 62;
+    --switch-edge: 126 126 134;
+  }
+}
+:root[data-theme="dark"] {
+    --bg: 0 0 0;
+    --surface: 28 28 30;
+    --surface-2: 44 44 46;
+    --line: 56 56 58;
+    --ink: 242 243 240;
+    --ink-2: 170 175 166;
+    --ink-3: 143 148 137;
+    --accent: 92 184 128;
+    --accent-ink: 6 30 16;
+    --accent-soft: 24 50 34;
+    --accent-deep: 120 205 150;
+    --protein: 236 135 103;
+    --carbs: 110 160 230;
+    --fat: 222 180 80;
+    --warn: 240 175 70;
+    --warn-soft: 56 42 14;
+    --danger: 255 105 97;
+    color-scheme: dark;
+  --raised: 99 99 102;
+  --switch-off: 58 58 62;
+  --switch-edge: 126 126 134;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: rgb(var(--bg));
+  color: rgb(var(--ink));
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Segoe UI', Roboto, system-ui, sans-serif;
+  font-size: 17px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior-y: none;
+}
+
+@media (min-width: 1024px) {
+  body { font-size: 15px; }
+}
+
+.tabular { font-variant-numeric: tabular-nums; }
+.text-accent-deep { color: rgb(var(--accent-deep)); }
+
+:focus-visible {
+  outline: 2px solid rgb(var(--accent));
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+
+/* Barras flotantes con material translúcido (solo capa funcional, nunca contenido) */
+.material-bar {
+  background: rgb(var(--surface) / 0.82);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .material-bar { background: rgb(var(--surface)); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.safe-top { padding-top: env(safe-area-inset-top); }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+
+/* ---------------- Movimiento ---------------- */
+@keyframes page-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes sheet-pop { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pop { 0% { transform: scale(1); } 40% { transform: scale(1.18); } 100% { transform: scale(1); } }
+@keyframes toast-in { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes shimmer { 0% { opacity: .45; } 50% { opacity: 1; } 100% { opacity: .45; } }
+@keyframes ring-draw { from { stroke-dashoffset: var(--ring-len); } }
+
+@layer utilities {
+.anim-page { animation: page-in .32s cubic-bezier(.2,.8,.2,1) both; }
+.anim-fade { animation: fade-in .2s ease both; }
+.anim-sheet { animation: sheet-up .36s cubic-bezier(.2,.9,.25,1) both; }
+.anim-pop-in { animation: sheet-pop .28s cubic-bezier(.2,.9,.25,1) both; }
+.anim-pop { animation: pop .38s cubic-bezier(.3,1.6,.5,1); }
+.anim-toast { animation: toast-in .25s cubic-bezier(.2,.9,.25,1) both; }
+.anim-shimmer { animation: shimmer 1.2s ease-in-out infinite; }
+
+}
+
+.press { transition: transform .12s ease, background-color .15s ease, opacity .15s ease; }
+.press:active { transform: scale(.97); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}
+
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type='number'] { -moz-appearance: textfield; }
+
+/* Portada ilustrada de receta: plato visto desde arriba sobre un mantel tintado */
+.recipe-cover { background: hsl(var(--h) 36% 90%); color: hsl(var(--h) 38% 30%); }
+.recipe-cover::before {
+  content: ''; position: absolute; height: 74%; aspect-ratio: 1; border-radius: 9999px;
+  background: hsl(var(--h) 40% 96%); box-shadow: 0 0 0 1px hsl(var(--h) 25% 82%), 0 2px 6px hsl(var(--h) 30% 40% / .12);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .recipe-cover { background: hsl(var(--h) 16% 20%); color: hsl(var(--h) 45% 74%); }
+  :root:not([data-theme="light"]) .recipe-cover::before { background: hsl(var(--h) 14% 26%); box-shadow: 0 0 0 1px hsl(var(--h) 12% 32%); }
+}
+:root[data-theme="dark"] .recipe-cover { background: hsl(var(--h) 16% 20%); color: hsl(var(--h) 45% 74%); }
+:root[data-theme="dark"] .recipe-cover::before { background: hsl(var(--h) 14% 26%); box-shadow: 0 0 0 1px hsl(var(--h) 12% 32%); }
+
+/* ---------------- Interruptor ---------------- */
+.switch {
+  position: relative; display: block; width: 51px; height: 31px; border-radius: 9999px;
+  background: rgb(var(--switch-off));
+  box-shadow: inset 0 0 0 1.5px rgb(var(--switch-edge));
+  transition: background-color .25s ease, box-shadow .25s ease, filter .15s ease;
+}
+.switch-knob {
+  position: absolute; top: 2px; left: 2px; height: 27px; width: 27px; border-radius: 9999px;
+  display: flex; align-items: center; justify-content: center;
+  background: #fff; color: rgb(var(--accent));
+  box-shadow: 0 3px 8px rgb(0 0 0 / .15), 0 1px 1px rgb(0 0 0 / .16), 0 0 0 .5px rgb(0 0 0 / .04);
+  transition: transform .34s cubic-bezier(.3, 1.35, .5, 1), width .2s ease;
+}
+.switch-check { opacity: 0; transform: scale(.4); transition: opacity .18s ease, transform .3s cubic-bezier(.3, 1.6, .5, 1); }
+.switch-input:checked + .switch { background: rgb(var(--accent)); box-shadow: inset 0 0 0 1.5px rgb(var(--accent)); }
+.switch-input:checked + .switch .switch-knob { transform: translateX(20px); }
+.switch-input:checked + .switch .switch-check { opacity: 1; transform: none; }
+.switch-row:hover .switch-input:not(:disabled) + .switch { filter: brightness(.96); }
+/* Al mantener pulsado, el tirador se estira como en iOS */
+.switch-row:active .switch-input:not(:disabled) + .switch .switch-knob { width: 33px; }
+.switch-row:active .switch-input:checked:not(:disabled) + .switch .switch-knob { transform: translateX(14px); }
+.switch-input:focus-visible + .switch { outline: 2px solid rgb(var(--accent)); outline-offset: 3px; }
+.switch-input:disabled + .switch { opacity: .45; }
+@media (forced-colors: active) {
+  .switch { border: 1px solid CanvasText; }
+  .switch-input:checked + .switch { background: Highlight; }
+}

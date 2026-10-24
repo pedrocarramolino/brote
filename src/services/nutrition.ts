@@ -1,0 +1,150 @@
+import type { Allergen, AppData, DietType, Food, ISODate, Macros, PlannedMeal, Recipe, UserProfile } from '../types';
+import { getFood, getRecipe } from './catalog';
+
+export const ZERO: Macros = { kcal: 0, protein: 0, carbs: 0, fat: 0 };
+
+export const addMacros = (a: Macros, b: Macros): Macros => ({
+  kcal: a.kcal + b.kcal,
+  protein: a.protein + b.protein,
+  carbs: a.carbs + b.carbs,
+  fat: a.fat + b.fat,
+});
+
+export const scaleMacros = (m: Macros, k: number): Macros => ({
+  kcal: m.kcal * k,
+  protein: m.protein * k,
+  carbs: m.carbs * k,
+  fat: m.fat * k,
+});
+
+export function foodMacros(food: Food, amount: number): Macros {
+  return scaleMacros(food.per100, amount / 100);
+}
+
+export interface RecipeNutrition {
+  macros: Macros;
+  /** ingredientes sin datos en la base (no se suman) */
+  missing: string[];
+}
+
+/** Valores por ración de la receta, multiplicados por `portion`. */
+export function recipeNutrition(data: Pick<AppData, 'customFoods'>, recipe: Recipe, portion = 1): RecipeNutrition {
+  let m = ZERO;
+  const missing: string[] = [];
+  for (const ing of recipe.ingredients) {
+    const f = getFood(data, ing.foodId);
+    if (!f) {
+      missing.push(ing.foodId);
+      continue;
+    }
+    m = addMacros(m, foodMacros(f, ing.amount * portion));
+  }
+  return { macros: m, missing };
+}
+
+export function recipeAllergens(data: Pick<AppData, 'customFoods'>, recipe: Recipe): Allergen[] {
+  const set = new Set<Allergen>();
+  recipe.ingredients.forEach((i) => getFood(data, i.foodId)?.allergens?.forEach((a) => set.add(a)));
+  return [...set];
+}
+
+export function foodAllowedByDiet(food: Food, diet: DietType | undefined): boolean {
+  const t = food.tags ?? [];
+  switch (diet) {
+    case 'vegana':
+      return !t.includes('animal');
+    case 'vegetariana':
+      return !t.includes('carne') && !t.includes('pescado');
+    case 'pescetariana':
+      return !t.includes('carne');
+    default:
+      return true;
+  }
+}
+
+export interface FitResult {
+  ok: boolean;
+  reasons: string[]; // motivos de incompatibilidad
+}
+
+/** Comprueba si una receta respeta dieta, alergias y alimentos que no gustan. */
+export function recipeFit(data: Pick<AppData, 'customFoods'>, recipe: Recipe, profile: UserProfile): FitResult {
+  const reasons: string[] = [];
+  const allergens = recipeAllergens(data, recipe);
+  const hit = allergens.filter((a) => profile.allergies.includes(a));
+  if (hit.length) reasons.push(`Contiene ${hit.join(', ')}`);
+  for (const ing of recipe.ingredients) {
+    const f = getFood(data, ing.foodId);
+    if (!f) continue;
+    if (!foodAllowedByDiet(f, profile.dietType)) {
+      reasons.push(`${f.name} no encaja con tu alimentación`);
+      break;
+    }
+  }
+  const dislikes = profile.dislikes.map((d) => d.toLowerCase());
+  const disliked = recipe.ingredients
+    .map((i) => getFood(data, i.foodId))
+    .filter((f): f is Food => !!f && (dislikes.includes(f.id) || dislikes.some((d) => d.length > 2 && f.name.toLowerCase().includes(d))));
+  if (disliked.length) reasons.push(`Lleva ${disliked.map((f) => f.name.toLowerCase()).join(', ')}`);
+  return { ok: reasons.length === 0, reasons };
+}
+
+export interface MealNutrition {
+  macros: Macros | null; // null = sin datos verificados
+}
+
+export function plannedMealNutrition(data: AppData, meal: PlannedMeal): MealNutrition {
+  const r = getRecipe(data, meal.recipeId);
+  if (!r || r.custom) return { macros: null };
+  return { macros: recipeNutrition(data, r, meal.portion).macros };
+}
+
+export function plannedMealsFor(data: AppData, date: ISODate): PlannedMeal[] {
+  const out: PlannedMeal[] = [];
+  for (const week of Object.values(data.plan)) for (const m of week) if (m.date === date) out.push(m);
+  return out;
+}
+
+export interface DayTotals {
+  consumed: Macros;
+  planned: Macros;
+  /** platos marcados como hechos sin datos nutricionales verificados */
+  unknownDone: number;
+  doneMeals: number;
+  totalMeals: number;
+  logCount: number;
+}
+
+/** Totales del día: comidas del plan marcadas como hechas + registros manuales. */
+export function dayTotals(data: AppData, date: ISODate): DayTotals {
+  let consumed = ZERO;
+  let planned = ZERO;
+  let unknownDone = 0;
+  let doneMeals = 0;
+  const meals = plannedMealsFor(data, date).filter((m) => data.profile.mealSlots.includes(m.slot));
+  for (const m of meals) {
+    const n = plannedMealNutrition(data, m);
+    if (n.macros) planned = addMacros(planned, n.macros);
+    if (m.status === 'hecha') {
+      doneMeals++;
+      if (n.macros) consumed = addMacros(consumed, n.macros);
+      else unknownDone++;
+    }
+  }
+  const logs = data.log.filter((l) => l.date === date);
+  for (const l of logs) {
+    const f = getFood(data, l.foodId);
+    if (f) consumed = addMacros(consumed, foodMacros(f, l.amount));
+  }
+  return { consumed, planned, unknownDone, doneMeals, totalMeals: meals.length, logCount: logs.length };
+}
+
+export const round = (m: Macros): Macros => ({
+  kcal: Math.round(m.kcal),
+  protein: Math.round(m.protein),
+  carbs: Math.round(m.carbs),
+  fat: Math.round(m.fat),
+});
+
+/** Referencia general de etiquetado UE (Reglamento 1169/2011, adulto medio). No es un objetivo personal. */
+export const EU_REFERENCE_INTAKE = { kcal: 2000, protein: 50, carbs: 260, fat: 70 };
