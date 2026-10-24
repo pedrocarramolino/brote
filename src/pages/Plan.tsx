@@ -9,6 +9,7 @@ import { n0, normalize } from '../lib/format';
 import { navigate } from '../lib/router';
 import { ALL_SLOTS, allRecipes, getRecipe, SLOT_META, slotsOrdered } from '../services/catalog';
 import { addMacros, plannedMealNutrition, recipeFit, recipeNutrition, ZERO } from '../services/nutrition';
+import { trackingStart } from '../services/habits';
 import { MacroInline, RecipeCover } from '../features/meals/RecipeBits';
 import { RecipeSheet } from '../features/meals/RecipeSheet';
 import { SwapSheet } from '../features/meals/SwapSheet';
@@ -108,7 +109,13 @@ export function PlanPage({ dateParam }: { dateParam: string | null }) {
           </div>
 
           {dayMeals.length === 0 ? (
-            <Card><EmptyState icon={<Clock size={24} />} title="Generando el menú…">El menú de la semana se crea automáticamente según tus preferencias.</EmptyState></Card>
+            <Card>
+              {selected < trackingStart(data) ? (
+                <EmptyState icon={<Clock size={24} />} title="Sin plan este día">Tu plan empieza el {formatLong(trackingStart(data)).toLowerCase()}.</EmptyState>
+              ) : (
+                <EmptyState icon={<Clock size={24} />} title="Generando el menú…">El menú de la semana se crea automáticamente según tus preferencias.</EmptyState>
+              )}
+            </Card>
           ) : (
             <ul className="space-y-3">
               {slots.map((slot) => {

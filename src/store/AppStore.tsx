@@ -4,6 +4,7 @@ import { repository } from '../services/storage';
 import { generateWeek } from '../services/planner';
 import { createDemoData, DATA_VERSION } from '../data/demo';
 import { DEFAULT_HABITS } from '../data/routines';
+import { startOfWeek, todayISO } from '../lib/dates';
 
 interface StoreValue {
   data: AppData | null;
@@ -26,6 +27,8 @@ function migrate(d: AppData): AppData {
   out.chat ??= [];
   out.favorites ??= { recipes: [], foods: [] };
   out.shopping ??= {};
+  // Revisión semanal: los datos anteriores a esta función empiezan con la semana actual revisada
+  if (out.onboarded && !out.weeklyReview) out.weeklyReview = { lastCompleted: startOfWeek(todayISO()) };
   out.version = DATA_VERSION;
   return out;
 }

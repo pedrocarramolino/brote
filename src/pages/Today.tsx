@@ -4,8 +4,11 @@ import type { FoodLogEntry, MealSlot, PlannedMeal } from '../types';
 import { PageHeader } from '../components/layout/AppShell';
 import { Card, IconButton, ProgressBar, SectionTitle } from '../components/ui/primitives';
 import { DemoBanner } from '../components/DemoBanner';
-import { useData, useWeek } from '../store/AppStore';
-import { addDays, formatDate, formatLong, formatShort, formatWeekdayShort, greeting, startOfWeek, todayISO, weekdayIndex } from '../lib/dates';
+import { useData, useStore, useWeek } from '../store/AppStore';
+import { useToday } from '../hooks/useToday';
+import { reviewDue } from '../services/weeklyReview';
+import { WeeklyReviewCard, WeeklyReviewSheet } from '../features/review/WeeklyReview';
+import { addDays, formatDate, formatLong, formatShort, formatWeekdayShort, greeting, startOfWeek, weekdayIndex } from '../lib/dates';
 import { n0, n1 } from '../lib/format';
 import { navigate } from '../lib/router';
 import { getRecipe, SLOT_META, slotsOrdered } from '../services/catalog';
@@ -33,7 +36,10 @@ function currentSlot(slots: MealSlot[], schedule: Partial<Record<MealSlot, strin
 
 export function TodayPage({ dateParam }: { dateParam: string | null }) {
   const data = useData();
-  const today = todayISO();
+  const today = useToday();
+  const { mutate } = useStore();
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const due = reviewDue(data, today);
   const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : today;
   const isToday = date === today;
   const weekMeals = useWeek(startOfWeek(date));
@@ -93,6 +99,13 @@ export function TodayPage({ dateParam }: { dateParam: string | null }) {
       />
 
       <DemoBanner />
+
+      {due && isToday && (
+        <WeeklyReviewCard
+          onStart={() => setReviewOpen(true)}
+          onPostpone={() => mutate((d) => void (d.weeklyReview = { ...(d.weeklyReview ?? {}), postponedUntil: addDays(today, 1) }))}
+        />
+      )}
 
       <div className="grid grid-cols-1 gap-x-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0">
@@ -197,6 +210,7 @@ export function TodayPage({ dateParam }: { dateParam: string | null }) {
           setRecipeMeal(null);
         }}
       />
+      <WeeklyReviewSheet open={reviewOpen} onClose={() => setReviewOpen(false)} today={today} />
       <SwapSheet meal={liveSwapMeal} open={!!liveSwapMeal} onClose={() => setSwapMeal(null)} />
       <LogFoodSheet
         open={!!logSlot || !!editLog}

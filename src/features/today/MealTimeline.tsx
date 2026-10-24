@@ -78,7 +78,7 @@ export function MealTimeline({ date, meals, onOpenRecipe, onSwap, onAddFood, onE
                 </div>
                 {meal ? (
                   <div className="flex items-center gap-1 pb-2 pl-2 pr-1">
-                    <button type="button" onClick={() => onOpenRecipe(meal)} className="flex min-w-0 flex-1 items-center gap-3 rounded-[14px] p-2 text-left hover:bg-surface2/60" disabled={!recipe || recipe.custom}>
+                    <button type="button" data-open-recipe={meal.id} onClick={() => onOpenRecipe(meal)} className="flex min-w-0 flex-1 items-center gap-3 rounded-[14px] p-2 text-left hover:bg-surface2/60" disabled={!recipe || recipe.custom}>
                       <RecipeCover recipe={recipe} size={52} />
                       <span className="min-w-0 flex-1">
                         <span className={cx('block text-[16px] font-semibold leading-snug', meal.status === 'omitida' && 'line-through')}>

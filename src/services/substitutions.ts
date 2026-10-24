@@ -1,7 +1,7 @@
 import type { AppData, Macros, PlannedMeal, Recipe } from '../types';
 import { startOfWeek } from '../lib/dates';
 import { allRecipes, getRecipe } from './catalog';
-import { recipeFit, recipeNutrition } from './nutrition';
+import { mealIngredients, recipeFit, recipeNutrition, ingredientsNutrition } from './nutrition';
 
 export interface Alternative {
   recipe: Recipe;
@@ -25,7 +25,7 @@ export interface AlternativesResult {
  */
 export function findAlternatives(data: AppData, meal: PlannedMeal, limit = 8): AlternativesResult {
   const original = getRecipe(data, meal.recipeId);
-  const origMacros = original && !original.custom ? recipeNutrition(data, original, meal.portion).macros : null;
+  const origMacros = original && !original.custom ? ingredientsNutrition(data, mealIngredients(data, meal), meal.portion).macros : null;
   const profile = data.profile;
 
   // ingredientes ya presentes en el menú de la semana (disponibilidad)
@@ -33,7 +33,7 @@ export function findAlternatives(data: AppData, meal: PlannedMeal, limit = 8): A
   const weekFoods = new Set<string>();
   for (const m of data.plan[weekKey] ?? []) {
     if (m.id === meal.id) continue;
-    getRecipe(data, m.recipeId)?.ingredients.forEach((i) => weekFoods.add(i.foodId));
+    mealIngredients(data, m).forEach((i) => weekFoods.add(i.foodId));
   }
 
   let excludedCount = 0;

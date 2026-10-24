@@ -2,6 +2,7 @@ import { CATEGORY_ORDER } from '../data/foods';
 import type { AppData, Food, ISODate, ShopCategory, ShoppingOverrides } from '../types';
 import { n0, n1 } from '../lib/format';
 import { getFood, getRecipe } from './catalog';
+import { mealIngredients } from './nutrition';
 
 export interface ShoppingItem {
   key: string; // foodId o id manual
@@ -69,7 +70,7 @@ export function buildShoppingList(data: AppData, monday: ISODate): { groups: Sho
       if (meal.customName) freeDishes.push(meal.customName);
       continue;
     }
-    for (const ing of r.ingredients) {
+    for (const ing of mealIngredients(data, meal)) {
       const cur = acc.get(ing.foodId) ?? { amount: 0, usedIn: new Set<string>() };
       cur.amount += ing.amount * meal.portion;
       cur.usedIn.add(r.name);

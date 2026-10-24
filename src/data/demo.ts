@@ -61,8 +61,11 @@ export function createUserData(profile: UserProfile): AppData {
     favorites: { recipes: [], foods: [] },
     chat: [],
   };
-  const monday = startOfWeek(todayISO());
-  data.plan[monday] = generateWeek(data, monday);
+  // El plan empieza hoy: los días anteriores al alta no tienen comidas (ni entran en la compra).
+  const today = todayISO();
+  const monday = startOfWeek(today);
+  data.plan[monday] = generateWeek(data, monday).filter((m) => m.date >= today);
+  data.weeklyReview = { lastCompleted: monday };
   return data;
 }
 

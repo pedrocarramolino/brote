@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { ArrowLeftRight, Check, ChevronDown, Clock, Heart, Info, Users } from 'lucide-react';
+import { ArrowLeftRight, Check, ChevronDown, Clock, Heart, Info, RotateCcw, Trash2, Users } from 'lucide-react';
 import type { PlannedMeal, Recipe } from '../../types';
 import { Sheet } from '../../components/ui/Sheet';
 import { Badge, Button, IconButton, Stepper, cx } from '../../components/ui/primitives';
 import { useData, useStore } from '../../store/AppStore';
 import { getFood, SLOT_META } from '../../services/catalog';
-import { foodMacros, recipeAllergens, recipeNutrition } from '../../services/nutrition';
+import { foodMacros, ingredientsAllergens, ingredientsNutrition, mealIngredients, type EffectiveIngredient } from '../../services/nutrition';
 import { equivalencesFor } from '../../services/equivalences';
 import { ALLERGEN_LABELS } from '../../data/foods';
 import { n0, n1 } from '../../lib/format';
@@ -28,8 +28,13 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap }: Props) {
 
   if (!recipe) return null;
   const portion = meal?.portion ?? 1;
-  const { macros, missing } = recipeNutrition(data, recipe, portion);
-  const allergens = recipeAllergens(data, recipe);
+  // Ingredientes reales: con las sustituciones hechas en ESTA comida
+  const editable = !!meal && meal.recipeId === recipe.id;
+  const rows: EffectiveIngredient[] = editable ? mealIngredients(data, meal, { includeRemoved: true }) : recipe.ingredients.map((i) => ({ ...i }));
+  const ingredients = rows.filter((i) => !i.removed);
+  const { macros, missing } = ingredientsNutrition(data, ingredients, portion);
+  const allergens = ingredientsAllergens(data, ingredients);
+  const inMeal = new Set(ingredients.map((i) => i.foodId));
   const fav = data.favorites.recipes.includes(recipe.id);
 
   const toggleFav = () =>
@@ -101,45 +106,136 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap }: Props) {
 
       <h3 className="mb-2 mt-6 text-[17px] font-bold">Ingredientes</h3>
       <ul className="divide-y divide-line/70 overflow-hidden rounded-[16px] bg-surface2/60 ring-1 ring-line/60">
-        {recipe.ingredients.map((ing) => {
+        {rows.map((ing) => {
+          const key = ing.replaces ?? ing.foodId;
+          if (ing.removed) {
+            const rf = getFood(data, ing.foodId);
+            return (
+              <li key={key} data-ingredient={key} className="flex min-h-[52px] items-center gap-3 px-4 py-2">
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-medium text-ink3 line-through">{rf?.name ?? ing.foodId}</span>
+                  <span className="block text-[12px] text-ink3">Quitado de esta comida</span>
+                </span>
+                <button
+                  type="button"
+                  data-restore={key}
+                  className="flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-[10px] px-3 text-[14px] font-semibold text-accent-deep hover:bg-accentSoft"
+                  onClick={() => actions.swapIngredient(meal!, key, null, { from: '', to: rf?.name ?? key })}
+                >
+                  <RotateCcw size={16} /> Volver a añadir
+                </button>
+              </li>
+            );
+          }
           const f = getFood(data, ing.foodId);
+          const orig = ing.replaces ? getFood(data, ing.replaces) : undefined;
           const amount = ing.amount * portion;
-          const eq = f ? equivalencesFor(data, f.id, amount) : null;
-          const expanded = openIng === ing.foodId;
+          // equivalencias del alimento actual; sin repetir alimentos que ya están en el plato
+          const exclude = new Set(inMeal);
+          if (ing.replaces) exclude.add(ing.replaces);
+          const eq = f ? equivalencesFor(data, f.id, ing.amount, { exclude }) : null;
+          const canExpand = editable || !!eq?.items.length;
+          const expanded = openIng === key;
+          const origAmount = recipe.ingredients.find((i) => i.foodId === key)?.amount ?? ing.amount;
           return (
-            <li key={ing.foodId}>
+            <li key={key} data-ingredient={key}>
               <button
                 type="button"
                 className="flex min-h-[52px] w-full items-center gap-3 px-4 py-2 text-left hover:bg-surface2"
-                onClick={() => setOpenIng(expanded ? null : ing.foodId)}
-                aria-expanded={eq ? expanded : undefined}
-                disabled={!eq}
+                onClick={() => setOpenIng(expanded ? null : key)}
+                aria-expanded={canExpand ? expanded : undefined}
+                disabled={!canExpand}
               >
                 <span className="min-w-0 flex-1">
                   <span className="block text-[15px] font-medium">{f?.name ?? ing.foodId}</span>
+                  {orig && <span className="block text-[12px] font-medium text-accent-deep">Sustituye a {orig.name.toLowerCase()}</span>}
                   {f && <span className="tabular block text-[12px] text-ink3">{n0(foodMacros(f, amount).kcal)} kcal</span>}
                 </span>
-                <span className="tabular text-[15px] font-semibold text-ink2">{n0(amount)} {f?.unit ?? 'g'}</span>
-                {eq && <ChevronDown size={16} className={cx('text-ink3 transition-transform', expanded && 'rotate-180')} aria-hidden="true" />}
+                <span className="tabular shrink-0 text-[15px] font-semibold text-ink2">{n0(amount)} {f?.unit ?? 'g'}</span>
+                {canExpand && <ChevronDown size={16} className={cx('shrink-0 text-ink3 transition-transform', expanded && 'rotate-180')} aria-hidden="true" />}
               </button>
-              {expanded && eq && (
+              {expanded && (
                 <div className="anim-fade bg-surface px-4 pb-3 pt-1">
-                  <p className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-ink3">Equivalencias · {eq.items[0]?.basisLabel}</p>
-                  <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-                    {eq.items.slice(0, 6).map((e) => (
-                      <li key={e.food.id} className="flex justify-between gap-2 rounded-[10px] bg-surface2 px-3 py-1.5 text-[14px]">
-                        <span className="truncate">{e.food.name}</span>
-                        <span className="tabular font-semibold text-ink2">{n0(e.amount)} {e.food.unit}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  {!!eq?.items.length && (
+                    <>
+                      <p className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-ink3">
+                        {editable ? 'Cambiar por' : 'Equivalencias'} · {eq.items[0].basisLabel}
+                      </p>
+                      <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                        {eq.items.slice(0, 8).map((e) => {
+                          const label = (
+                            <>
+                              <span className="min-w-0 flex-1 truncate">{e.food.name}</span>
+                              {e.blocked ? (
+                                <span className="shrink-0 text-[12px] text-ink3">{e.blocked}</span>
+                              ) : (
+                                <span className="tabular shrink-0 font-semibold text-ink2">{n0(e.amount * portion)} {e.food.unit}</span>
+                              )}
+                            </>
+                          );
+                          if (!editable || e.blocked)
+                            return (
+                              <li key={e.food.id} className={cx('flex items-center gap-2 rounded-[10px] bg-surface2 px-3 py-1.5 text-[14px]', e.blocked && 'opacity-55')}>
+                                {label}
+                              </li>
+                            );
+                          return (
+                            <li key={e.food.id}>
+                              <button
+                                type="button"
+                                data-equivalence={e.food.id}
+                                className="flex min-h-[44px] w-full items-center gap-2 rounded-[10px] bg-surface2 px-3 py-1.5 text-left text-[14px] ring-accent/40 transition hover:bg-accentSoft focus-visible:ring-2 active:scale-[0.99]"
+                                onClick={() => {
+                                  actions.swapIngredient(meal!, key, { foodId: e.food.id, amount: e.amount }, { from: f?.name ?? key, to: e.food.name });
+                                  setOpenIng(null);
+                                }}
+                              >
+                                {label}
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </>
+                  )}
+                  {editable && !eq?.items.length && <p className="pb-1 text-[13px] text-ink3">No hay equivalencias en la base para este alimento.</p>}
+                  {editable && !orig && ingredients.length > 1 && (
+                    <button
+                      type="button"
+                      data-remove={key}
+                      className="mt-2 flex min-h-[44px] w-full items-center gap-2 rounded-[10px] px-3 text-left text-[14px] font-semibold text-danger hover:bg-surface2"
+                      onClick={() => {
+                        actions.swapIngredient(meal!, key, { foodId: key, amount: 0 }, { from: f?.name ?? key, to: '' });
+                        setOpenIng(null);
+                      }}
+                    >
+                      <Trash2 size={16} /> Quitar de esta comida
+                    </button>
+                  )}
+                  {editable && orig && (
+                    <button
+                      type="button"
+                      data-restore={key}
+                      className="mt-2 flex min-h-[44px] w-full items-center gap-2 rounded-[10px] px-3 text-left text-[14px] font-semibold text-accent-deep hover:bg-accentSoft"
+                      onClick={() => {
+                        actions.swapIngredient(meal!, key, null, { from: f?.name ?? '', to: orig.name });
+                        setOpenIng(null);
+                      }}
+                    >
+                      <RotateCcw size={16} /> Volver a {orig.name.toLowerCase()} ({n0(origAmount * portion)} {orig.unit})
+                    </button>
+                  )}
                 </div>
               )}
             </li>
           );
         })}
       </ul>
-      <p className="mt-1.5 px-1 text-[12px] text-ink3">Toca un ingrediente para ver con qué puedes intercambiarlo.</p>
+      <p className="mt-1.5 px-1 text-[12px] text-ink3">
+        {editable
+          ? 'Toca un ingrediente y elige una equivalencia para cambiarlo solo en esta comida. Los valores y la lista de la compra se actualizan.'
+          : 'Toca un ingrediente para ver con qué puedes intercambiarlo. Para cambiarlo, abre la receta desde una comida de tu plan.'}
+      </p>
 
       <h3 className="mb-2 mt-6 text-[17px] font-bold">Alérgenos</h3>
       {allergens.length ? (

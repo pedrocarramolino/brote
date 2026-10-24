@@ -52,9 +52,11 @@ export function useMealActions() {
   const swap = useCallback(
     (meal: PlannedMeal, next: { recipeId: string } | { customName: string }) => {
       const prev = { recipeId: meal.recipeId, customName: meal.customName };
+      const prevMealSwaps = meal.swaps ? structuredClone(meal.swaps) : undefined;
       mutate((d) => {
         const m = findMeal(d, meal.id);
         if (!m) return;
+        delete m.swaps; // las sustituciones de ingredientes eran del plato anterior
         if ('recipeId' in next) {
           m.recipeId = next.recipeId;
           delete m.customName;
@@ -72,10 +74,38 @@ export function useMealActions() {
               const m = findMeal(d, meal.id);
               if (!m) return;
               m.recipeId = prev.recipeId;
+              if (prevMealSwaps) m.swaps = prevMealSwaps;
               if (prev.customName) m.customName = prev.customName;
               else delete m.customName;
             }),
         },
+      });
+    },
+    [mutate, toast],
+  );
+
+  /**
+   * Sustituye un ingrediente de la receta SOLO en esta comida (meal.swaps).
+   * `originalFoodId` es el ingrediente de la receta; `next = null` restaura el original.
+   */
+  const swapIngredient = useCallback(
+    (meal: PlannedMeal, originalFoodId: string, next: { foodId: string; amount: number } | null, labels: { from: string; to: string }) => {
+      const prevSwap = meal.swaps?.[originalFoodId];
+      const before = prevSwap ? { ...prevSwap } : undefined;
+      const apply = (val: { foodId: string; amount: number } | undefined) =>
+        mutate((d) => {
+          const m = findMeal(d, meal.id);
+          if (!m) return;
+          if (val && (val.foodId !== originalFoodId || val.amount <= 0)) {
+            m.swaps = { ...(m.swaps ?? {}), [originalFoodId]: { ...val } };
+          } else if (m.swaps) {
+            delete m.swaps[originalFoodId];
+            if (!Object.keys(m.swaps).length) delete m.swaps;
+          }
+        });
+      apply(next ?? undefined);
+      toast(!next ? `${labels.to} restaurado` : next.amount <= 0 ? `${labels.from} quitado de esta comida` : `${labels.from} → ${labels.to}`, {
+        action: { label: 'Deshacer', onClick: () => apply(before) },
       });
     },
     [mutate, toast],
@@ -127,5 +157,5 @@ export function useMealActions() {
     [mutate],
   );
 
-  return { toggleDone, setStatus, setPortion, swap, addLog, updateLog, removeLog, addPlanned };
+  return { toggleDone, setStatus, setPortion, swap, swapIngredient, addLog, updateLog, removeLog, addPlanned };
 }

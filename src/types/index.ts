@@ -110,6 +110,11 @@ export interface PlannedMeal {
   portion: number; // multiplicador de ración (1 = una ración)
   status: MealStatus;
   note?: string;
+  /**
+   * Sustituciones de ingredientes SOLO para esta comida: clave = alimento original de la receta,
+   * valor = alimento equivalente y cantidad por ración. La receta del catálogo no se modifica.
+   */
+  swaps?: Record<string, { foodId: string; amount: number }>;
   demo?: boolean;
 }
 
@@ -225,4 +230,11 @@ export interface AppData {
   shopping: Record<string, ShoppingOverrides>; // clave: lunes de la semana
   favorites: { recipes: string[]; foods: string[] };
   chat: ChatMessage[];
+  /** Revisión semanal: lunes de la última semana revisada y aplazamiento temporal. */
+  weeklyReview?: WeeklyReviewState;
+}
+
+export interface WeeklyReviewState {
+  lastCompleted?: ISODate; // lunes de la última semana confirmada
+  postponedUntil?: ISODate; // no volver a mostrar la tarjeta hasta este día (sigue pendiente)
 }

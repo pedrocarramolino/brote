@@ -9,7 +9,9 @@ import { useData, useStore } from '../store/AppStore';
 import { useAI } from '../hooks/useAI';
 import { navigate } from '../lib/router';
 import { n0, parseDecimal, uid } from '../lib/format';
-import { todayISO } from '../lib/dates';
+import { formatDate, todayISO } from '../lib/dates';
+import { reviewDue } from '../services/weeklyReview';
+import { WeeklyReviewSheet } from '../features/review/WeeklyReview';
 import { ALL_SLOTS, SLOT_META } from '../services/catalog';
 import { EU_REFERENCE_INTAKE } from '../services/nutrition';
 import { regenerateFrom } from '../services/planner';
@@ -35,6 +37,7 @@ export function ProfilePage({ section }: { section: string | null }) {
   const { status } = useAI();
   const p = data.profile;
   const [prefsChanged, setPrefsChanged] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   useEffect(() => {
     if (section) setTimeout(() => document.getElementById(section)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
@@ -118,6 +121,20 @@ export function ProfilePage({ section }: { section: string | null }) {
           <Button size="sm" variant="primary" onClick={regenerate}>Actualizar menú</Button>
         </div>
       )}
+
+      <Section id="revision" title="Revisión semanal" description="Cada lunes te proponemos repasar peso, medidas, preferencias y menú. Nada cambia sin tu confirmación.">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-[14px] text-ink2" data-review-status>
+            {reviewDue(data, todayISO())
+              ? 'Pendiente esta semana.'
+              : data.weeklyReview?.lastCompleted
+                ? `Última revisión: semana del ${formatDate(data.weeklyReview.lastCompleted)}.`
+                : 'Aún no has hecho ninguna revisión.'}
+          </p>
+          <Button size="sm" variant="tinted" onClick={() => setReviewOpen(true)}>Revisar ahora</Button>
+        </div>
+        <WeeklyReviewSheet open={reviewOpen} onClose={() => setReviewOpen(false)} today={todayISO()} />
+      </Section>
 
       <Section id="datos-basicos" title="Datos básicos">
         <div className="space-y-4">

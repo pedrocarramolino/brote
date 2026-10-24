@@ -29,9 +29,55 @@ export interface RecipeNutrition {
 
 /** Valores por ración de la receta, multiplicados por `portion`. */
 export function recipeNutrition(data: Pick<AppData, 'customFoods'>, recipe: Recipe, portion = 1): RecipeNutrition {
+  return ingredientsNutrition(data, recipe.ingredients, portion);
+}
+
+export interface EffectiveIngredient {
+  foodId: string;
+  amount: number; // por ración
+  /** alimento original de la receta si este ingrediente es una sustitución */
+  replaces?: string;
+  /** el usuario lo ha quitado de esta comida (solo con includeRemoved) */
+  removed?: boolean;
+}
+
+/**
+ * Ingredientes reales de una comida del plan: los de la receta con las sustituciones
+ * que el usuario haya hecho en ESA comida (meal.swaps). Única fuente para nutrición,
+ * lista de la compra y vista de receta.
+ */
+export function mealIngredients(data: Pick<AppData, 'customRecipes'>, meal: PlannedMeal, opts: { includeRemoved?: boolean } = {}): EffectiveIngredient[] {
+  const r = getRecipe(data, meal.recipeId);
+  if (!r) return [];
+  const rows = r.ingredients.map((i): EffectiveIngredient => {
+    const s = meal.swaps?.[i.foodId];
+    if (!s) return { foodId: i.foodId, amount: i.amount };
+    // cantidad 0 = ingrediente quitado de esta comida
+    if (s.amount <= 0) return { foodId: i.foodId, amount: i.amount, removed: true };
+    return { foodId: s.foodId, amount: s.amount, replaces: i.foodId };
+  });
+  return opts.includeRemoved ? rows : rows.filter((x) => !x.removed);
+}
+
+/** Alimentos de una lista que no encajan con el perfil (alergia, dieta o no le gustan). */
+export function conflictingFoods(data: Pick<AppData, 'customFoods'>, ingredients: { foodId: string }[], profile: UserProfile): { foodId: string; reason: string }[] {
+  const dislikes = profile.dislikes.map((d) => d.toLowerCase());
+  const out: { foodId: string; reason: string }[] = [];
+  for (const ing of ingredients) {
+    const f = getFood(data, ing.foodId);
+    if (!f) continue;
+    const allergen = f.allergens?.find((a) => profile.allergies.includes(a));
+    if (allergen) out.push({ foodId: f.id, reason: 'alérgeno' });
+    else if (!foodAllowedByDiet(f, profile.dietType)) out.push({ foodId: f.id, reason: 'no encaja con tu alimentación' });
+    else if (dislikes.includes(f.id) || dislikes.some((d) => d.length > 2 && f.name.toLowerCase().includes(d))) out.push({ foodId: f.id, reason: 'no te gusta' });
+  }
+  return out;
+}
+
+export function ingredientsNutrition(data: Pick<AppData, 'customFoods'>, ingredients: { foodId: string; amount: number }[], portion = 1): RecipeNutrition {
   let m = ZERO;
   const missing: string[] = [];
-  for (const ing of recipe.ingredients) {
+  for (const ing of ingredients) {
     const f = getFood(data, ing.foodId);
     if (!f) {
       missing.push(ing.foodId);
@@ -96,7 +142,13 @@ export interface MealNutrition {
 export function plannedMealNutrition(data: AppData, meal: PlannedMeal): MealNutrition {
   const r = getRecipe(data, meal.recipeId);
   if (!r || r.custom) return { macros: null };
-  return { macros: recipeNutrition(data, r, meal.portion).macros };
+  return { macros: ingredientsNutrition(data, mealIngredients(data, meal), meal.portion).macros };
+}
+
+export function ingredientsAllergens(data: Pick<AppData, 'customFoods'>, ingredients: { foodId: string }[]): Allergen[] {
+  const set = new Set<Allergen>();
+  ingredients.forEach((i) => getFood(data, i.foodId)?.allergens?.forEach((a) => set.add(a)));
+  return [...set];
 }
 
 export function plannedMealsFor(data: AppData, date: ISODate): PlannedMeal[] {

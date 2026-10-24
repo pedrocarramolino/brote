@@ -173,6 +173,13 @@ export function ProgressPage() {
               </div>
               <TrendLine data={wPoints} unit="kg" />
             </>
+          ) : lastW ? (
+            <>
+              <div className="mb-3 flex gap-6">
+                <Stat label="Último" value={`${n1(lastW.kg)} kg`} sub={formatDate(lastW.date)} />
+              </div>
+              <p className="rounded-[12px] bg-surface2 px-3.5 py-2.5 text-[14px] text-ink2">Con un registro más en este periodo verás la tendencia.</p>
+            </>
           ) : (
             <EmptyState icon={<Scale size={24} />} title="Datos insuficientes">
               {weights.length ? 'Necesitas al menos dos registros en este periodo para ver la tendencia.' : 'Registra tu peso para empezar a ver su evolución.'}
