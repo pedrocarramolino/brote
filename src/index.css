@@ -219,3 +219,8 @@ input[type='number'] { -moz-appearance: textfield; }
   .switch { border: 1px solid CanvasText; }
   .switch-input:checked + .switch { background: Highlight; }
 }
+
+/* Ingredientes de la portada ilustrada */
+.recipe-dot { box-shadow: 0 0 0 1.5px hsl(var(--h) 40% 96%), 0 1px 3px rgb(0 0 0 / .18); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .recipe-dot { box-shadow: 0 0 0 1.5px hsl(var(--h) 14% 26%); } }
+:root[data-theme="dark"] .recipe-dot { box-shadow: 0 0 0 1.5px hsl(var(--h) 14% 26%); }

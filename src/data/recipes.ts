@@ -1,15 +1,16 @@
-import type { Recipe } from '../types';
+import type { RecipeDraft } from './recipeLibrary/build';
 
 /*
- * Catálogo de recetas de DEMOSTRACIÓN. Cantidades por ración.
+ * Primeras recetas del catálogo. Cantidades por ración.
  * Los valores nutricionales NO están escritos a mano: se calculan a partir de
  * los ingredientes y de la base de alimentos (src/data/foods.ts), de modo que
  * cualquier total es trazable hasta un alimento y una cantidad concretos.
  */
 
-const r = (x: Omit<Recipe, 'servings'> & { servings?: number }): Recipe => ({ servings: 1, ...x });
+const r = (x: Omit<RecipeDraft, 'servings'> & { servings?: number }): RecipeDraft => ({ servings: 1, ...x });
 
-export const BASE_RECIPES: Recipe[] = [
+/** Recetas originales de la app (v1). Se conservan con sus identificadores para no romper menús guardados. */
+export const LEGACY_RECIPES: RecipeDraft[] = [
   // ---------------- Desayunos ----------------
   r({
     id: 'porridge-platano', name: 'Porridge de avena con plátano y nueces', slots: ['desayuno'], minutes: 10, hue: 38, icon: 'wheat', tags: ['rapida'],

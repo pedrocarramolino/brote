@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeftRight, Check, ChevronDown, Clock, Heart, Info, RotateCcw, Trash2, Users } from 'lucide-react';
 import type { PlannedMeal, Recipe } from '../../types';
 import { Sheet } from '../../components/ui/Sheet';
@@ -10,6 +10,8 @@ import { equivalencesFor } from '../../services/equivalences';
 import { ALLERGEN_LABELS } from '../../data/foods';
 import { n0, n1 } from '../../lib/format';
 import { MacroGrid, RecipeCover } from './RecipeBits';
+import { CATEGORY_META, DIET_LABEL, DIFFICULTY_LABEL, MAIN_LABEL, QUALITY_TEXT, TAG_LABEL, dietLabels, nutritionQuality } from '../../services/recipeMeta';
+import { Segmented } from '../../components/ui/primitives';
 import { useMealActions } from './useMealActions';
 
 interface Props {
@@ -25,9 +27,13 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap }: Props) {
   const { mutate } = useStore();
   const actions = useMealActions();
   const [openIng, setOpenIng] = useState<string | null>(null);
+  const [whole, setWhole] = useState(false);
+  useEffect(() => setWhole(false), [recipe?.id, open]);
 
   if (!recipe) return null;
   const portion = meal?.portion ?? 1;
+  // cantidades mostradas: la ración planificada, o la receta completa si se pide
+  const qty = meal ? portion : whole ? recipe.servings : 1;
   // Ingredientes reales: con las sustituciones hechas en ESTA comida
   const editable = !!meal && meal.recipeId === recipe.id;
   const rows: EffectiveIngredient[] = editable ? mealIngredients(data, meal, { includeRemoved: true }) : recipe.ingredients.map((i) => ({ ...i }));
@@ -82,16 +88,23 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap }: Props) {
 
       <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[14px] text-ink2">
         <span className="inline-flex items-center gap-1.5"><Clock size={16} /> {recipe.minutes} min</span>
-        <span className="inline-flex items-center gap-1.5"><Users size={16} /> {portion === 1 ? '1 ración' : `${n1(portion)} raciones`}</span>
-        {recipe.tags.includes('batch') && <Badge>Se puede preparar con antelación</Badge>}
+        <span className="inline-flex items-center gap-1.5"><Users size={16} /> {meal ? (portion === 1 ? '1 ración' : `${n1(portion)} raciones`) : `Receta para ${recipe.servings} ${recipe.servings === 1 ? 'ración' : 'raciones'}`}</span>
+        <span>{CATEGORY_META[recipe.category].label} · {DIFFICULTY_LABEL[recipe.difficulty]} · {MAIN_LABEL[recipe.main]}</span>
+      </div>
+      <div className="mb-4 flex flex-wrap gap-1.5" data-recipe-tags>
         {fav && <Badge tone="accent">Favorita</Badge>}
+        {dietLabels(data, recipe).map((d) => <Badge key={d} tone="accent">{DIET_LABEL[d]}</Badge>)}
+        {recipe.tags.map((t) => <Badge key={t}>{TAG_LABEL[t]}</Badge>)}
       </div>
 
+      <p className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-ink3">{meal && portion !== 1 ? `Para tu ración (×${n1(portion)})` : 'Por ración'}</p>
       <MacroGrid m={macros} />
-      <p className="mt-2 flex items-start gap-1.5 text-[12px] leading-snug text-ink3">
+      <p className="mt-2 flex items-start gap-1.5 text-[12px] leading-snug text-ink3" data-quality={nutritionQuality(data, ingredients)}>
         <Info size={14} className="mt-[1px] shrink-0" />
-        Valores calculados a partir de los ingredientes con datos de referencia (BEDCA/USDA). Son aproximados y pueden variar según marca y preparación.
-        {missing.length > 0 && ` ${missing.length} ingrediente(s) sin datos no se han sumado.`}
+        <span>
+          <strong className="font-semibold text-ink2">{QUALITY_TEXT[nutritionQuality(data, ingredients)].label}.</strong> {QUALITY_TEXT[nutritionQuality(data, ingredients)].detail}
+          {missing.length > 0 && ` ${missing.length} ingrediente(s) sin datos no se han sumado.`}
+        </span>
       </p>
 
       {meal && (
@@ -104,7 +117,18 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap }: Props) {
         </div>
       )}
 
-      <h3 className="mb-2 mt-6 text-[17px] font-bold">Ingredientes</h3>
+      <div className="mb-2 mt-6 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-[17px] font-bold">Ingredientes</h3>
+        {!meal && recipe.servings > 1 && (
+          <Segmented
+            className="w-full xs:w-auto"
+            label="Cantidades"
+            value={whole ? 'all' : 'one'}
+            onChange={(v) => setWhole(v === 'all')}
+            options={[{ value: 'one', label: '1 ración' }, { value: 'all', label: `${recipe.servings} raciones` }]}
+          />
+        )}
+      </div>
       <ul className="divide-y divide-line/70 overflow-hidden rounded-[16px] bg-surface2/60 ring-1 ring-line/60">
         {rows.map((ing) => {
           const key = ing.replaces ?? ing.foodId;
@@ -129,7 +153,7 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap }: Props) {
           }
           const f = getFood(data, ing.foodId);
           const orig = ing.replaces ? getFood(data, ing.replaces) : undefined;
-          const amount = ing.amount * portion;
+          const amount = ing.amount * qty;
           // equivalencias del alimento actual; sin repetir alimentos que ya están en el plato
           const exclude = new Set(inMeal);
           if (ing.replaces) exclude.add(ing.replaces);
@@ -169,7 +193,7 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap }: Props) {
                               {e.blocked ? (
                                 <span className="shrink-0 text-[12px] text-ink3">{e.blocked}</span>
                               ) : (
-                                <span className="tabular shrink-0 font-semibold text-ink2">{n0(e.amount * portion)} {e.food.unit}</span>
+                                <span className="tabular shrink-0 font-semibold text-ink2">{n0(e.amount * qty)} {e.food.unit}</span>
                               )}
                             </>
                           );
@@ -222,7 +246,7 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap }: Props) {
                         setOpenIng(null);
                       }}
                     >
-                      <RotateCcw size={16} /> Volver a {orig.name.toLowerCase()} ({n0(origAmount * portion)} {orig.unit})
+                      <RotateCcw size={16} /> Volver a {orig.name.toLowerCase()} ({n0(origAmount * qty)} {orig.unit})
                     </button>
                   )}
                 </div>

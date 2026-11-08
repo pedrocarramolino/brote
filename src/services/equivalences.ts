@@ -1,7 +1,7 @@
 import { EXCHANGE_GROUPS } from '../data/foods';
 import type { AppData, Food } from '../types';
 import { getFood } from './catalog';
-import { foodAllowedByDiet } from './nutrition';
+import { foodAllowedByDiet, foodDisliked } from './nutrition';
 
 export interface Equivalence {
   food: Food;
@@ -30,7 +30,6 @@ export function equivalencesFor(
   const target = base.per100[group.basis] * (amount / 100);
   if (target <= 0) return null;
   const p = data.profile;
-  const dislikes = p.dislikes.map((d) => d.toLowerCase());
   const items: Equivalence[] = [];
   for (const id of group.foods) {
     if (id === foodId || opts.exclude?.has(id)) continue;
@@ -42,7 +41,7 @@ export function equivalencesFor(
     const allergen = f.allergens?.find((a) => p.allergies.includes(a));
     if (allergen) blocked = 'Alérgeno';
     else if (!foodAllowedByDiet(f, p.dietType)) blocked = 'No encaja con tu dieta';
-    else if (dislikes.includes(f.id) || dislikes.some((d) => d.length > 2 && f.name.toLowerCase().includes(d))) blocked = 'No te gusta';
+    else if (foodDisliked(f, p.dislikes)) blocked = 'No te gusta';
     items.push({ food: f, amount: Math.max(5, Math.round(amt / 5) * 5), basisLabel: BASIS_LABEL[group.basis], blocked });
   }
   // primero las utilizables

@@ -81,19 +81,34 @@ export interface RecipeIngredient {
   note?: string;
 }
 
+/** Categoría de la biblioteca (más fina que la franja del día en que se puede planificar). */
+export type RecipeCategory = 'desayuno' | 'mediamanana' | 'comida' | 'cena' | 'merienda' | 'snack' | 'postre';
+export type Difficulty = 'facil' | 'media' | 'elaborada';
+export type MainIngredient =
+  | 'pollo' | 'pavo' | 'ternera' | 'cerdo' | 'pescado_blanco' | 'pescado_azul' | 'atun' | 'marisco'
+  | 'huevo' | 'lacteo' | 'legumbre' | 'proteina_vegetal' | 'cereal' | 'verdura' | 'fruta';
+export type RecipeTag = 'rapida' | 'batch' | 'sin_coccion' | 'alta_proteina' | 'ligera' | 'cuchara' | 'horno' | 'dulce' | 'tradicional' | 'internacional';
+
 export interface Recipe {
   id: string;
   name: string;
+  /** franjas del día en las que el planificador puede usarla */
   slots: MealSlot[];
+  /** categoría principal en la biblioteca */
+  category: RecipeCategory;
+  difficulty: Difficulty;
+  /** ingrediente principal (para alternar proteínas en los menús) */
+  main: MainIngredient;
   servings: number; // raciones que salen de la receta tal como está escrita
   minutes: number;
   ingredients: RecipeIngredient[]; // cantidades POR RACIÓN
   steps: string[];
-  tags: ('rapida' | 'batch' | 'sin_coccion' | 'alta_proteina' | 'ligera')[];
+  tags: RecipeTag[];
   imageUrl?: string;
   /** tono (0-360) de la portada ilustrada cuando no hay fotografía */
   hue: number;
-  icon: 'salad' | 'egg' | 'fish' | 'beef' | 'soup' | 'wheat' | 'apple' | 'milk' | 'sandwich' | 'carrot' | 'drumstick' | 'cookie';
+  icon: 'salad' | 'egg' | 'fish' | 'beef' | 'soup' | 'wheat' | 'apple' | 'milk' | 'sandwich' | 'carrot' | 'drumstick' | 'cookie'
+    | 'pizza' | 'croissant' | 'cherry' | 'citrus' | 'banana' | 'bean' | 'nut' | 'cake' | 'icecream' | 'ham' | 'pot' | 'leaf' | 'grape' | 'eggfried' | 'coffee' | 'dessert';
   /** true para recetas creadas por el usuario sin datos verificados */
   custom?: boolean;
 }

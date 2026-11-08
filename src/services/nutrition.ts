@@ -61,7 +61,6 @@ export function mealIngredients(data: Pick<AppData, 'customRecipes'>, meal: Plan
 
 /** Alimentos de una lista que no encajan con el perfil (alergia, dieta o no le gustan). */
 export function conflictingFoods(data: Pick<AppData, 'customFoods'>, ingredients: { foodId: string }[], profile: UserProfile): { foodId: string; reason: string }[] {
-  const dislikes = profile.dislikes.map((d) => d.toLowerCase());
   const out: { foodId: string; reason: string }[] = [];
   for (const ing of ingredients) {
     const f = getFood(data, ing.foodId);
@@ -69,7 +68,7 @@ export function conflictingFoods(data: Pick<AppData, 'customFoods'>, ingredients
     const allergen = f.allergens?.find((a) => profile.allergies.includes(a));
     if (allergen) out.push({ foodId: f.id, reason: 'alérgeno' });
     else if (!foodAllowedByDiet(f, profile.dietType)) out.push({ foodId: f.id, reason: 'no encaja con tu alimentación' });
-    else if (dislikes.includes(f.id) || dislikes.some((d) => d.length > 2 && f.name.toLowerCase().includes(d))) out.push({ foodId: f.id, reason: 'no te gusta' });
+    else if (foodDisliked(f, profile.dislikes)) out.push({ foodId: f.id, reason: 'no te gusta' });
   }
   return out;
 }
@@ -92,6 +91,31 @@ export function recipeAllergens(data: Pick<AppData, 'customFoods'>, recipe: Reci
   const set = new Set<Allergen>();
   recipe.ingredients.forEach((i) => getFood(data, i.foodId)?.allergens?.forEach((a) => set.add(a)));
   return [...set];
+}
+
+
+const LEGUME_IDS = new Set(['garbanzos', 'lentejas', 'alubias', 'hummus', 'guisantes', 'edamame']);
+const strip = (t: string) => t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+
+/**
+ * ¿Es un alimento que no le gusta al usuario? Compara con el nombre y, para términos
+ * genéricos («pescado», «marisco», «legumbres», «carne», «lácteos»), con el grupo del alimento.
+ */
+export function foodDisliked(food: Food, dislikes: string[]): boolean {
+  const name = strip(food.name);
+  const tags = food.tags ?? [];
+  for (const raw of dislikes) {
+    const d = strip(raw);
+    if (d.length < 3) continue;
+    if (d === food.id || name.includes(d)) return true;
+    const stem = d.replace(/s$/, '');
+    if ((stem === 'pescado' || stem === 'pescados') && (food.allergens?.includes('pescado') || food.allergens?.includes('marisco'))) return true;
+    if (stem === 'marisco' && food.allergens?.includes('marisco')) return true;
+    if (stem.startsWith('legumbre') && LEGUME_IDS.has(food.id)) return true;
+    if (stem === 'carne' && tags.includes('carne')) return true;
+    if ((stem === 'lacteo' || stem === 'lacteos') && tags.includes('lacteo')) return true;
+  }
+  return false;
 }
 
 export function foodAllowedByDiet(food: Food, diet: DietType | undefined): boolean {
@@ -127,10 +151,9 @@ export function recipeFit(data: Pick<AppData, 'customFoods'>, recipe: Recipe, pr
       break;
     }
   }
-  const dislikes = profile.dislikes.map((d) => d.toLowerCase());
   const disliked = recipe.ingredients
     .map((i) => getFood(data, i.foodId))
-    .filter((f): f is Food => !!f && (dislikes.includes(f.id) || dislikes.some((d) => d.length > 2 && f.name.toLowerCase().includes(d))));
+    .filter((f): f is Food => !!f && foodDisliked(f, profile.dislikes));
   if (disliked.length) reasons.push(`Lleva ${disliked.map((f) => f.name.toLowerCase()).join(', ')}`);
   return { ok: reasons.length === 0, reasons };
 }

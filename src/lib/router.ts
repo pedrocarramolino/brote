@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
-export type Route = 'hoy' | 'plan' | 'progreso' | 'compra' | 'perfil' | 'asistente' | 'actividad';
-const ROUTES: Route[] = ['hoy', 'plan', 'progreso', 'compra', 'perfil', 'asistente', 'actividad'];
+export type Route = 'hoy' | 'plan' | 'progreso' | 'compra' | 'perfil' | 'asistente' | 'actividad' | 'recetas';
+const ROUTES: Route[] = ['hoy', 'plan', 'progreso', 'compra', 'perfil', 'asistente', 'actividad', 'recetas'];
 
 export interface Location {
   route: Route;
@@ -50,7 +50,7 @@ export function navigate(route: Route, params?: Record<string, string>, opts: { 
 /** Orden de las categorías principales para la navegación por gestos. */
 export const TAB_ORDER: Route[] = ['hoy', 'plan', 'progreso', 'compra', 'perfil'];
 /** Asistente y Actividad cuelgan de Perfil en la barra inferior. */
-export const tabOf = (r: Route): Route => (r === 'asistente' || r === 'actividad' ? 'perfil' : r);
+export const tabOf = (r: Route): Route => (r === 'asistente' || r === 'actividad' ? 'perfil' : r === 'recetas' ? 'plan' : r);
 
 export function useNavigate() {
   return useCallback(navigate, []);

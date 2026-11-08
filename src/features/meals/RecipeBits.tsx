@@ -1,3 +1,4 @@
+import type React from 'react';
 import { HelpCircle } from 'lucide-react';
 import type { Macros, Recipe } from '../../types';
 import { RECIPE_ICONS } from '../../components/ui/icons';
@@ -22,6 +23,9 @@ export function RecipeCover({ recipe, size = 56, className, rounded = 'rounded-[
   }
   const Icon = RECIPE_ICONS[recipe.icon];
   const iconSize = size === 'full' ? 56 : Math.round((size as number) * 0.44);
+  // Pequeños «ingredientes» alrededor del plato: colores de los 3 ingredientes con más peso
+  const dots = [...recipe.ingredients].sort((a, b) => b.amount - a.amount).slice(0, 3).map((i) => foodColor(i.foodId));
+  const big = size === 'full' || (size as number) >= 48;
   return (
     <div
       aria-hidden="true"
@@ -29,8 +33,36 @@ export function RecipeCover({ recipe, size = 56, className, rounded = 'rounded-[
       style={{ ...style, ['--h' as string]: recipe.hue }}
     >
       <Icon size={iconSize} strokeWidth={1.6} className="recipe-cover-icon relative" />
+      {big &&
+        dots.map((c, i) => (
+          <span
+            key={i}
+            className="recipe-dot absolute rounded-full"
+            style={{ background: c, ...DOT_POS[(i + recipe.hue) % DOT_POS.length], width: size === 'full' ? 18 - i * 3 : '14%', height: size === 'full' ? 18 - i * 3 : '14%' }}
+          />
+        ))}
     </div>
   );
+}
+
+const DOT_POS: React.CSSProperties[] = [
+  { top: '12%', left: '14%' }, { bottom: '14%', right: '12%' }, { top: '16%', right: '16%' }, { bottom: '12%', left: '18%' },
+];
+
+const COLORS: [RegExp, string][] = [
+  [/tomate|fresas|frambuesas|sandia|granada|cerezas|pimiento$|piquillos|remolacha|col_lombarda|frutos_rojos/, '#d9534f'],
+  [/zanahoria|calabaza|naranja|mandarina|mango|melocoton|boniato|caqui|salmon|cacao_?$/, '#e8913a'],
+  [/espinacas|lechuga|rucula|brocoli|calabacin|judias|pepino|kiwi|aguacate|kale|acelgas|esparragos|guisantes|canonigos|perejil|edamame|pimiento_verde|alcachofa|puerro|apio/, '#5aa155'],
+  [/platano|pina|limon|maiz|huevo|claras|patata|pasta|arroz|cuscus|bulgur|quinoa|tortilla_maiz|melon|pera/, '#e9c46a'],
+  [/berenjena|uvas|ciruela|higos|cebolla_morada|datiles|pasas/, '#7b5ea7'],
+  [/chocolate|cacao|cafe|lentejas|nueces|avellanas|pan_centeno|ternera|lomo|solomillo|jamon_serrano|crema_cacahuete|tempeh|seitan/, '#8a5a3c'],
+  [/pan|avena|muesli|granola|harina|tortilla_trigo|pan_pita|tortitas|copos|almendras|garbanzos|alubias|hummus|tahini|sesamo|pipas|anacardos|pistachos/, '#c9a06b'],
+  [/pollo|pavo|merluza|bacalao|lubina|dorada|gambas|langostinos|calamar|sepia|tofu|champinones|setas|coliflor|ajo|cebolla/, '#efe2cf'],
+  [/sardinas|caballa|atun|mejillones/, '#6f8fa6'],
+  [/yogur|queso|leche|kefir|skyr|requeson|mozzarella|feta|parmesano|bebida|coco/, '#f6f1e7'],
+];
+function foodColor(id: string): string {
+  return COLORS.find(([re]) => re.test(id))?.[1] ?? '#bfc8b8';
 }
 
 export function MacroInline({ m, className }: { m: Macros; className?: string }) {

@@ -1,14 +1,14 @@
-import { useMemo, useState } from 'react';
-import { ArrowLeftRight, ChevronLeft, ChevronRight, Clock, Heart, Search, Sparkles } from 'lucide-react';
-import type { MealSlot, PlannedMeal, Recipe } from '../types';
+import { useState } from 'react';
+import { ArrowLeftRight, BookOpen, ChevronLeft, ChevronRight, Clock, Sparkles } from 'lucide-react';
+import type { PlannedMeal, Recipe } from '../types';
 import { PageHeader } from '../components/layout/AppShell';
-import { Badge, Button, Card, Chip, EmptyState, IconButton, ProgressBar, SectionTitle, Segmented, cx } from '../components/ui/primitives';
+import { Button, Card, EmptyState, IconButton, ProgressBar, SectionTitle, cx } from '../components/ui/primitives';
 import { useData, useWeek } from '../store/AppStore';
 import { addDays, formatLong, formatWeekRange, formatWeekdayShort, fromISO, startOfWeek, todayISO, weekDates } from '../lib/dates';
-import { n0, normalize } from '../lib/format';
+import { n0 } from '../lib/format';
 import { navigate } from '../lib/router';
-import { ALL_SLOTS, allRecipes, getRecipe, SLOT_META, slotsOrdered } from '../services/catalog';
-import { addMacros, plannedMealNutrition, recipeFit, recipeNutrition, ZERO } from '../services/nutrition';
+import { allRecipes, getRecipe, SLOT_META, slotsOrdered } from '../services/catalog';
+import { addMacros, plannedMealNutrition, ZERO } from '../services/nutrition';
 import { trackingStart } from '../services/habits';
 import { MacroInline, RecipeCover } from '../features/meals/RecipeBits';
 import { RecipeSheet } from '../features/meals/RecipeSheet';
@@ -174,7 +174,7 @@ export function PlanPage({ dateParam }: { dateParam: string | null }) {
         </aside>
       </div>
 
-      <RecipeCatalog onOpen={(r) => setRecipeView({ recipe: r })} />
+      <LibraryLink />
 
       <RecipeSheet
         recipe={liveMeal ? getRecipe(data, liveMeal.recipeId) : recipeView?.recipe}
@@ -188,68 +188,21 @@ export function PlanPage({ dateParam }: { dateParam: string | null }) {
   );
 }
 
-function RecipeCatalog({ onOpen }: { onOpen: (r: Recipe) => void }) {
+function LibraryLink() {
   const data = useData();
-  const [q, setQ] = useState('');
-  const [mode, setMode] = useState<'todas' | 'favoritas'>('todas');
-  const [slot, setSlot] = useState<MealSlot | null>(null);
-
-  const list = useMemo(() => {
-    const nq = normalize(q.trim());
-    return allRecipes(data)
-      .filter((r) => !r.custom)
-      .filter((r) => (mode === 'favoritas' ? data.favorites.recipes.includes(r.id) : true))
-      .filter((r) => (slot ? r.slots.includes(slot) : true))
-      .filter((r) => (nq ? normalize(r.name).includes(nq) : true));
-  }, [data, q, mode, slot]);
-
+  const total = allRecipes(data).filter((r) => !r.custom).length;
+  const favs = data.favorites.recipes.map((id) => getRecipe(data, id)).filter((r): r is Recipe => !!r);
   return (
     <section className="mt-2" aria-labelledby="recetas-title">
       <SectionTitle id="recetas-title">Recetas</SectionTitle>
-      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center">
-        <label className="flex h-11 flex-1 items-center gap-2 rounded-[12px] bg-surface px-3 ring-1 ring-line/70 focus-within:ring-2 focus-within:ring-accent">
-          <Search size={18} className="text-ink3" aria-hidden="true" />
-          <span className="sr-only">Buscar receta</span>
-          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar receta" className="h-full w-full bg-transparent text-[16px] placeholder:text-ink3 focus:outline-none" />
-        </label>
-        <Segmented className="sm:w-60" label="Mostrar" value={mode} onChange={setMode} options={[{ value: 'todas', label: 'Todas' }, { value: 'favoritas', label: 'Favoritas' }]} />
-      </div>
-      <div className="no-scrollbar -mx-4 mb-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0">
-        <Chip selected={slot === null} onClick={() => setSlot(null)}>Todas</Chip>
-        {ALL_SLOTS.map((s) => (
-          <Chip key={s} selected={slot === s} onClick={() => setSlot(slot === s ? null : s)}>{SLOT_META[s].label}</Chip>
-        ))}
-      </div>
-
-      {list.length === 0 ? (
-        <Card>
-          <EmptyState icon={mode === 'favoritas' ? <Heart size={24} /> : <Search size={24} />} title={mode === 'favoritas' ? 'Sin favoritas todavía' : 'Sin resultados'}>
-            {mode === 'favoritas' ? 'Abre una receta y pulsa el corazón para guardarla aquí.' : 'Prueba con otro nombre o quita el filtro.'}
-          </EmptyState>
-        </Card>
-      ) : (
-        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {list.map((r) => {
-            const fit = recipeFit(data, r, data.profile);
-            const m = recipeNutrition(data, r).macros;
-            return (
-              <li key={r.id}>
-                <button type="button" onClick={() => onOpen(r)} className="press flex w-full items-center gap-3 rounded-xl2 bg-surface p-3 text-left shadow-card ring-1 ring-line/60 hover:bg-surface2/40">
-                  <RecipeCover recipe={r} size={64} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[15px] font-semibold leading-snug">{r.name}</span>
-                    <span className="tabular mt-0.5 block text-[13px] text-ink2">{n0(m.kcal)} kcal · {r.minutes} min</span>
-                    <span className="mt-1 flex flex-wrap gap-1">
-                      {data.favorites.recipes.includes(r.id) && <Badge tone="accent">Favorita</Badge>}
-                      {!fit.ok && <Badge tone="danger">{fit.reasons[0]}</Badge>}
-                    </span>
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <button type="button" onClick={() => navigate('recetas', undefined, { push: true })} className="press flex w-full items-center gap-3 rounded-xl2 bg-surface p-4 text-left shadow-card ring-1 ring-line/60 hover:bg-surface2/40" data-open-library>
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-accentSoft text-accent-deep"><BookOpen size={24} /></span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[16px] font-semibold">Biblioteca de recetas</span>
+          <span className="block text-[14px] text-ink2">{total} recetas con filtros por comida, tiempo, ingrediente, proteína y calorías{favs.length ? ` · ${favs.length} favoritas` : ''}</span>
+        </span>
+        <ChevronRight size={20} className="shrink-0 text-ink3" />
+      </button>
     </section>
   );
 }

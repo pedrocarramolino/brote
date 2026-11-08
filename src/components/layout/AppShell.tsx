@@ -1,5 +1,5 @@
 import { useRef, type ReactNode } from 'react';
-import { Activity, CalendarDays, ChartLine, House, ShoppingBasket, Sparkles, UserRound, type LucideIcon } from 'lucide-react';
+import { Activity, BookOpen, CalendarDays, ChartLine, House, ShoppingBasket, Sparkles, UserRound, type LucideIcon } from 'lucide-react';
 import { navigate, tabOf, type Route } from '../../lib/router';
 import { useSwipeTabs } from '../../hooks/useSwipeTabs';
 import { cx } from '../ui/primitives';
@@ -15,6 +15,7 @@ const PRIMARY: { route: Route; label: string; icon: LucideIcon }[] = [
 ];
 
 const SECONDARY: { route: Route; label: string; icon: LucideIcon }[] = [
+  { route: 'recetas', label: 'Recetas', icon: BookOpen },
   { route: 'asistente', label: 'Asistente', icon: Sparkles },
   { route: 'actividad', label: 'Actividad física', icon: Activity },
 ];

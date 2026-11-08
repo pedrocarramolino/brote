@@ -23,7 +23,7 @@ export interface AlternativesResult {
  * alergias e incompatibilidades (filtro duro), tipo de comida, tiempo disponible,
  * cercanía nutricional al original, ingredientes ya presentes en la semana y objetivo.
  */
-export function findAlternatives(data: AppData, meal: PlannedMeal, limit = 8): AlternativesResult {
+export function findAlternatives(data: AppData, meal: PlannedMeal, limit = 8, opts: { anySlot?: boolean } = {}): AlternativesResult {
   const original = getRecipe(data, meal.recipeId);
   const origMacros = original && !original.custom ? ingredientsNutrition(data, mealIngredients(data, meal), meal.portion).macros : null;
   const profile = data.profile;
@@ -31,8 +31,10 @@ export function findAlternatives(data: AppData, meal: PlannedMeal, limit = 8): A
   // ingredientes ya presentes en el menú de la semana (disponibilidad)
   const weekKey = startOfWeek(meal.date);
   const weekFoods = new Set<string>();
+  const weekRecipes = new Set<string>();
   for (const m of data.plan[weekKey] ?? []) {
     if (m.id === meal.id) continue;
+    if (m.recipeId) weekRecipes.add(m.recipeId);
     mealIngredients(data, m).forEach((i) => weekFoods.add(i.foodId));
   }
 
@@ -40,7 +42,7 @@ export function findAlternatives(data: AppData, meal: PlannedMeal, limit = 8): A
   const alternatives: Alternative[] = [];
 
   for (const r of allRecipes(data)) {
-    if (r.custom || r.id === meal.recipeId || !r.slots.includes(meal.slot)) continue;
+    if (r.custom || r.id === meal.recipeId || (!opts.anySlot && !r.slots.includes(meal.slot))) continue;
     const fit = recipeFit(data, r, profile);
     if (!fit.ok) {
       excludedCount++;
@@ -81,6 +83,11 @@ export function findAlternatives(data: AppData, meal: PlannedMeal, limit = 8): A
     score += sharedRatio * 20;
     if (sharedRatio >= 0.6) reasons.push('Usa ingredientes de tu semana');
 
+    if (weekRecipes.has(r.id)) {
+      score -= 15;
+      reasons.push('Ya está en tu semana');
+    }
+    if (opts.anySlot && !r.slots.includes(meal.slot)) score -= 8;
     if (data.favorites.recipes.includes(r.id)) {
       score += 12;
       reasons.unshift('Favorita');

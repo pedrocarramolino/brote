@@ -1,5 +1,5 @@
 import { BASE_FOODS } from '../data/foods';
-import { BASE_RECIPES } from '../data/recipes';
+import { RECIPE_LIBRARY as BASE_RECIPES } from '../data/recipeLibrary';
 import type { AppData, Food, MealSlot, Recipe } from '../types';
 
 export const SLOT_META: Record<MealSlot, { label: string; short: string; time: string }> = {

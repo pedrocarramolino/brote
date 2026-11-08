@@ -4,6 +4,7 @@ import { useStore } from './store/AppStore';
 import { useHashRouter } from './lib/router';
 import { TodayPage } from './pages/Today';
 import { PlanPage } from './pages/Plan';
+import { RecipesPage } from './pages/Recipes';
 import { ProgressPage } from './pages/Progress';
 import { ShoppingPage } from './pages/Shopping';
 import { ProfilePage } from './pages/Profile';
@@ -39,6 +40,7 @@ export default function App() {
       {route === 'perfil' && <ProfilePage section={params.get('s')} />}
       {route === 'asistente' && <AssistantPage />}
       {route === 'actividad' && <ActivityPage weekParam={params.get('w')} />}
+      {route === 'recetas' && <RecipesPage />}
     </AppShell>
   );
 }

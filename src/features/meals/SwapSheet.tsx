@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ChevronLeft, Clock, PencilLine, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, Clock, PencilLine, Search, ShieldCheck, Shuffle } from 'lucide-react';
 import type { PlannedMeal } from '../../types';
 import { Sheet } from '../../components/ui/Sheet';
-import { Badge, Button, TextField, cx } from '../../components/ui/primitives';
+import { Badge, Button, Chip, Segmented, TextField, cx } from '../../components/ui/primitives';
 import { useData } from '../../store/AppStore';
 import { findAlternatives, type Alternative } from '../../services/substitutions';
 import { getFood, SLOT_META } from '../../services/catalog';
-import { n0 } from '../../lib/format';
+import { n0, normalize } from '../../lib/format';
+import { surpriseRecipe } from '../../services/planner';
+import { recipeNutrition } from '../../services/nutrition';
+import { CATEGORY_META } from '../../services/recipeMeta';
 import { MacroInline, RecipeCover } from './RecipeBits';
 import { useMealActions } from './useMealActions';
 
@@ -27,6 +30,11 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
   const [freeMode, setFreeMode] = useState(false);
   const [freeName, setFreeName] = useState('');
   const [freeError, setFreeError] = useState<string | null>(null);
+  const [q, setQ] = useState('');
+  const [scope, setScope] = useState<'slot' | 'all'>('slot');
+  const [maxMin, setMaxMin] = useState<0 | 15 | 30>(0);
+  const [shown, setShown] = useState(25);
+  const [surprised, setSurprised] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (open) {
@@ -34,12 +42,42 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
       setFreeMode(false);
       setFreeName('');
       setFreeError(null);
+      setQ('');
+      setScope('slot');
+      setMaxMin(0);
+      setShown(25);
+      setSurprised(new Set());
     }
   }, [open, meal?.id]);
 
-  const result = useMemo(() => (meal ? findAlternatives(data, meal) : null), [data, meal]);
+  const result = useMemo(() => (meal ? findAlternatives(data, meal, 1000, { anySlot: scope === 'all' }) : null), [data, meal, scope]);
+  const filtered = useMemo(() => {
+    if (!result) return [];
+    const nq = normalize(q.trim());
+    return result.alternatives.filter((a) => {
+      if (maxMin && a.recipe.minutes > maxMin) return false;
+      if (!nq) return true;
+      return normalize(a.recipe.name).includes(nq) || a.recipe.ingredients.some((i) => normalize(getFood(data, i.foodId)?.name ?? '').includes(nq));
+    });
+  }, [result, q, maxMin, data]);
   if (!meal || !result) return null;
-  const { original, alternatives, excludedCount } = result;
+  const { original, excludedCount } = result;
+  const alternatives = filtered;
+
+  const surprise = () => {
+    const r = surpriseRecipe(data, meal, { anySlot: scope === 'all', exclude: surprised });
+    if (!r) return;
+    setSurprised((s) => new Set(s).add(r.id));
+    const macros = recipeNutrition(data, r, meal.portion).macros;
+    const om = original.macros;
+    setSelected({
+      recipe: r,
+      macros,
+      score: 0,
+      reasons: ['Sorpréndeme'],
+      delta: om ? { kcal: macros.kcal - om.kcal, protein: macros.protein - om.protein, carbs: macros.carbs - om.carbs, fat: macros.fat - om.fat } : null,
+    });
+  };
 
   const confirm = () => {
     if (freeMode) {
@@ -70,7 +108,12 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
             <Button variant="secondary" icon={<ChevronLeft size={18} />} onClick={() => { setSelected(null); setFreeMode(false); }}>
               Volver
             </Button>
-            <Button className="flex-1" onClick={confirm}>Confirmar cambio</Button>
+            {selected?.reasons.includes('Sorpréndeme') && (
+              <Button variant="secondary" icon={<Shuffle size={18} />} onClick={surprise} aria-label="Otra sorpresa">
+                <span className="hidden xs:inline">Otra</span>
+              </Button>
+            )}
+            <Button className="flex-1" onClick={confirm} data-confirm-swap>Confirmar cambio</Button>
           </div>
         ) : undefined
       }
@@ -85,11 +128,36 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
             </span>
           </div>
 
+          <div className="mb-3 space-y-2.5">
+            <div className="flex gap-2">
+              <label className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-[12px] bg-surface2 px-3 focus-within:ring-2 focus-within:ring-accent">
+                <Search size={18} className="shrink-0 text-ink3" aria-hidden="true" />
+                <span className="sr-only">Buscar por nombre o ingrediente</span>
+                <input type="search" value={q} onChange={(e) => { setQ(e.target.value); setShown(25); }} placeholder="Nombre o ingrediente" className="h-full w-full min-w-0 bg-transparent text-[16px] placeholder:text-ink3 focus:outline-none" data-swap-search />
+              </label>
+              <Button variant="tinted" icon={<Shuffle size={18} />} onClick={surprise} data-surprise>
+                <span className="hidden xs:inline">Sorpréndeme</span>
+              </Button>
+            </div>
+            <Segmented
+              label="Qué recetas mostrar"
+              value={scope}
+              onChange={(v) => { setScope(v); setShown(25); }}
+              options={[{ value: 'slot', label: SLOT_META[meal.slot].label }, { value: 'all', label: 'Todas las recetas' }]}
+            />
+            <div className="flex flex-wrap gap-2">
+              {([0, 15, 30] as const).map((m) => (
+                <Chip key={m} selected={maxMin === m} onClick={() => { setMaxMin(m); setShown(25); }}>{m === 0 ? 'Cualquier tiempo' : `≤ ${m} min`}</Chip>
+              ))}
+            </div>
+            <p className="tabular text-[13px] text-ink3" data-swap-count>{alternatives.length} {alternatives.length === 1 ? 'receta' : 'recetas'}</p>
+          </div>
+
           {alternatives.length === 0 ? (
-            <p className="py-8 text-center text-[15px] text-ink2">No hay alternativas compatibles en el catálogo para esta comida. Puedes añadir un plato libre.</p>
+            <p className="py-8 text-center text-[15px] text-ink2">No hay recetas compatibles con estos filtros. Prueba con «Todas las recetas» o añade un plato libre.</p>
           ) : (
             <ul className="space-y-2">
-              {alternatives.map((a) => (
+              {alternatives.slice(0, shown).map((a) => (
                 <li key={a.recipe.id}>
                   <button
                     type="button"
@@ -99,6 +167,10 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
                     <RecipeCover recipe={a.recipe} size={56} />
                     <span className="min-w-0 flex-1">
                       <span className="block text-[16px] font-semibold leading-snug">{a.recipe.name}</span>
+                      <span className="block truncate text-[12px] text-ink3">
+                        {scope === 'all' && `${CATEGORY_META[a.recipe.category].label} · `}
+                        {a.recipe.ingredients.slice(0, 4).map((i) => getFood(data, i.foodId)?.name.toLowerCase()).join(', ')}
+                      </span>
                       <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[13px]">
                         <span className="tabular text-ink2">{n0(a.macros.kcal)} kcal</span>
                         {a.delta && <Delta v={a.delta.kcal} unit="kcal" />}
@@ -117,6 +189,11 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
                 </li>
               ))}
             </ul>
+          )}
+          {alternatives.length > shown && (
+            <Button variant="secondary" className="mt-3 w-full" onClick={() => setShown((n) => n + 25)}>
+              Ver más ({alternatives.length - shown})
+            </Button>
           )}
 
           <button
