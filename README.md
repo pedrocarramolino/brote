@@ -73,6 +73,8 @@ Datos del usuario: favoritas (`favorites.recipes`), historial derivado del plan 
 
 Publicada en Vercel (proyecto `brote`): https://brote-gules.vercel.app
 
+El proyecto está conectado al repositorio de GitHub: cada push a `main` publica en producción y cada push a otra rama genera una vista previa. Configuración de compilación: `npm install` · `npm run build` · salida `dist`.
+
 El backend (`api/assistant.ts`) elige la credencial en el servidor:
 
 1. `ANTHROPIC_API_KEY` (variable de entorno del proyecto), si existe.
