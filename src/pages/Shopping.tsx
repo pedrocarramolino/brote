@@ -174,7 +174,11 @@ export function ShoppingPage({ weekParam }: { weekParam: string | null }) {
                         <button type="button" onClick={() => setEditing(item)} className="flex min-w-0 flex-1 items-center justify-between gap-3 self-stretch py-2 text-left">
                           <span className="min-w-0">
                             <span className={cx('block font-medium leading-snug', storeMode ? 'text-[18px]' : 'text-[16px]', item.checked && 'text-ink3 line-through')}>{item.name}</span>
-                            {!storeMode && item.usedIn.length > 0 && <span className="block truncate text-[12px] text-ink3">{item.usedIn.length} receta{item.usedIn.length === 1 ? '' : 's'}</span>}
+                            {!storeMode && item.usedIn.length > 0 && (
+                              <span className="block truncate text-[12px] text-ink3" data-from-my-dishes={item.fromMyDishes || undefined}>
+                                {item.usedIn.length} receta{item.usedIn.length === 1 ? '' : 's'}{item.fromMyDishes ? ' · incluye Mis platos' : ''}
+                              </span>
+                            )}
                             {item.manual && !storeMode && <span className="block text-[12px] text-ink3">Añadido por ti</span>}
                           </span>
                           <span className="flex shrink-0 items-center gap-1.5">

@@ -19,6 +19,7 @@ import { HabitsCard } from '../features/today/HabitsCard';
 import { RecipeSheet } from '../features/meals/RecipeSheet';
 import { SwapSheet } from '../features/meals/SwapSheet';
 import { LogFoodSheet } from '../features/log/LogFoodSheet';
+import { DishEditor } from '../features/dishes/DishEditor';
 import { PhotoLogSheet } from '../features/log/PhotoLogSheet';
 import { StepsSheet } from '../features/activity/StepsSheet';
 
@@ -51,6 +52,9 @@ export function TodayPage({ dateParam }: { dateParam: string | null }) {
   const [swapMeal, setSwapMeal] = useState<PlannedMeal | null>(null);
   const [logSlot, setLogSlot] = useState<MealSlot | null>(null);
   const [editLog, setEditLog] = useState<FoodLogEntry | null>(null);
+  const [creatingDish, setCreatingDish] = useState<MealSlot | null>(null);
+  const [dishToLog, setDishToLog] = useState<{ id: string; slot: MealSlot } | null>(null);
+  const dishRecipe = dishToLog ? data.customRecipes.find((r) => r.id === dishToLog.id) ?? null : null;
   const [photoSlot, setPhotoSlot] = useState<MealSlot | null>(null);
   const [stepsOpen, setStepsOpen] = useState(false);
 
@@ -213,18 +217,29 @@ export function TodayPage({ dateParam }: { dateParam: string | null }) {
       <WeeklyReviewSheet open={reviewOpen} onClose={() => setReviewOpen(false)} today={today} />
       <SwapSheet meal={liveSwapMeal} open={!!liveSwapMeal} onClose={() => setSwapMeal(null)} />
       <LogFoodSheet
-        open={!!logSlot || !!editLog}
+        open={!!logSlot || !!editLog || !!dishRecipe}
         onClose={() => {
           setLogSlot(null);
           setEditLog(null);
+          setDishToLog(null);
         }}
         date={date}
-        slot={editLog?.slot ?? logSlot ?? defaultSlot}
+        slot={editLog?.slot ?? dishToLog?.slot ?? logSlot ?? defaultSlot}
         editEntry={editLog}
+        initialDish={dishRecipe}
+        onCreateDish={() => {
+          setCreatingDish(logSlot ?? defaultSlot);
+          setLogSlot(null);
+        }}
         onOpenPhoto={() => {
           setPhotoSlot(logSlot ?? defaultSlot);
           setLogSlot(null);
         }}
+      />
+      <DishEditor
+        open={!!creatingDish}
+        onClose={() => setCreatingDish(null)}
+        onSaved={(id) => setDishToLog({ id, slot: creatingDish ?? defaultSlot })}
       />
       <PhotoLogSheet open={!!photoSlot} onClose={() => setPhotoSlot(null)} date={date} slot={photoSlot ?? defaultSlot} />
       <StepsSheet open={stepsOpen} onClose={() => setStepsOpen(false)} date={date} />

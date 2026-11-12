@@ -117,8 +117,43 @@ export interface Recipe {
   hue: number;
   icon: 'salad' | 'egg' | 'fish' | 'beef' | 'soup' | 'wheat' | 'apple' | 'milk' | 'sandwich' | 'carrot' | 'drumstick' | 'cookie'
     | 'pizza' | 'croissant' | 'cherry' | 'citrus' | 'banana' | 'bean' | 'nut' | 'cake' | 'icecream' | 'ham' | 'pot' | 'leaf' | 'grape' | 'eggfried' | 'coffee' | 'dessert';
-  /** true para recetas creadas por el usuario sin datos verificados */
+  /** true para los platos creados por el usuario («Mis platos»); viven en AppData.customRecipes */
   custom?: boolean;
+  /** descripción libre del plato (platos del usuario) */
+  description?: string;
+  /** datos de edición de un plato del usuario: lo que introdujo, para el plato completo */
+  dish?: UserDishData;
+}
+
+/** Unidades que se pueden usar al crear un plato. */
+export type QtyUnit = 'g' | 'kg' | 'ml' | 'l' | 'unidad' | 'cucharada' | 'cucharadita';
+
+/** Ingrediente tal y como lo introduce el usuario: cantidad para el plato COMPLETO. */
+export interface DishIngredient {
+  foodId: string;
+  quantity: number;
+  unit: QtyUnit;
+}
+
+export interface UserDishData {
+  items: DishIngredient[];
+  /** id del perfil propietario */
+  ownerId: string;
+  createdAt: string;
+  updatedAt: string;
+  /** categoría elegida por el usuario */
+  category: 'desayuno' | 'comida' | 'cena' | 'merienda' | 'snack' | 'postre';
+}
+
+/** Copia de los valores de un consumo en el momento en que se registró (no cambia si se edita el plato). */
+export interface NutritionSnapshot {
+  name: string;
+  /** valores de UNA ración */
+  perServing: Macros;
+  fiber?: number;
+  /** false si algún ingrediente no tenía datos completos */
+  complete: boolean;
+  at: string;
 }
 
 export type MealStatus = 'pendiente' | 'hecha' | 'omitida';
@@ -138,6 +173,8 @@ export interface PlannedMeal {
    * valor = alimento equivalente y cantidad por ración. La receta del catálogo no se modifica.
    */
   swaps?: Record<string, { foodId: string; amount: number }>;
+  /** valores congelados (por ración) cuando el plato del usuario se edita o elimina después de usarlo */
+  snapshot?: NutritionSnapshot;
   /**
    * El usuario ha aceptado o elegido este plato: al volver a generar la propuesta
    * de la semana no se cambia automáticamente.
@@ -162,10 +199,16 @@ export interface FoodLogEntry {
   id: string;
   date: ISODate;
   slot: MealSlot;
+  /** alimento registrado ('' si es un plato) */
   foodId: string;
+  /** g/ml del alimento o, si es un plato, número de raciones */
   amount: number;
   createdAt: string;
-  method: 'manual' | 'foto-demo' | 'texto-demo' | 'texto-ia' | 'foto-ia';
+  method: 'manual' | 'foto-demo' | 'texto-demo' | 'texto-ia' | 'foto-ia' | 'plato';
+  /** plato de «Mis platos» registrado */
+  recipeId?: string;
+  /** valores del plato en el momento del registro: el historial no cambia si luego se edita el plato */
+  snapshot?: NutritionSnapshot;
   demo?: boolean;
 }
 

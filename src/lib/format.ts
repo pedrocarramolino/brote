@@ -23,3 +23,10 @@ export function parseDecimal(s: string): number {
 }
 
 export const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+/** «1 ración», «½ ración», «1,5 raciones» */
+export function servingsLabel(n: number): string {
+  if (n === 0.5) return '½ ración';
+  const t = String(Math.round(n * 100) / 100).replace('.', ',');
+  return `${t} ${n === 1 ? 'ración' : 'raciones'}`;
+}

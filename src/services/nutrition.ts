@@ -1,4 +1,4 @@
-import type { Allergen, AppData, DietType, Food, ISODate, Macros, PlannedMeal, Recipe, UserProfile } from '../types';
+import type { Allergen, AppData, DietType, Food, FoodLogEntry, ISODate, Macros, PlannedMeal, Recipe, UserProfile } from '../types';
 import { getFood, getRecipe } from './catalog';
 
 export const ZERO: Macros = { kcal: 0, protein: 0, carbs: 0, fat: 0 };
@@ -163,8 +163,10 @@ export interface MealNutrition {
 }
 
 export function plannedMealNutrition(data: AppData, meal: PlannedMeal): MealNutrition {
+  // valores congelados: el plato del usuario se editó o borró después de usarse
+  if (meal.snapshot) return { macros: scaleMacros(meal.snapshot.perServing, meal.portion) };
   const r = getRecipe(data, meal.recipeId);
-  if (!r || r.custom) return { macros: null };
+  if (!r) return { macros: null };
   return { macros: ingredientsNutrition(data, mealIngredients(data, meal), meal.portion).macros };
 }
 
@@ -207,11 +209,18 @@ export function dayTotals(data: AppData, date: ISODate): DayTotals {
     }
   }
   const logs = data.log.filter((l) => l.date === date);
-  for (const l of logs) {
-    const f = getFood(data, l.foodId);
-    if (f) consumed = addMacros(consumed, foodMacros(f, l.amount));
-  }
+  for (const l of logs) consumed = addMacros(consumed, logEntryMacros(data, l) ?? ZERO);
   return { consumed, planned, unknownDone, doneMeals, totalMeals: meals.length, logCount: logs.length };
+}
+
+/**
+ * Valores de un registro de Hoy: alimento × cantidad, o plato × raciones usando la copia
+ * guardada al registrarlo (si luego se edita el plato, lo ya comido no cambia).
+ */
+export function logEntryMacros(data: Pick<AppData, 'customFoods'>, l: FoodLogEntry): Macros | null {
+  if (l.snapshot) return scaleMacros(l.snapshot.perServing, l.amount);
+  const f = getFood(data, l.foodId);
+  return f ? foodMacros(f, l.amount) : null;
 }
 
 export const round = (m: Macros): Macros => ({

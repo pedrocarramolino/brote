@@ -25,7 +25,7 @@ export interface AlternativesResult {
  */
 export function findAlternatives(data: AppData, meal: PlannedMeal, limit = 8, opts: { anySlot?: boolean } = {}): AlternativesResult {
   const original = getRecipe(data, meal.recipeId);
-  const origMacros = original && !original.custom ? ingredientsNutrition(data, mealIngredients(data, meal), meal.portion).macros : null;
+  const origMacros = original ? ingredientsNutrition(data, mealIngredients(data, meal), meal.portion).macros : null;
   const profile = data.profile;
 
   // ingredientes ya presentes en el menú de la semana (disponibilidad)

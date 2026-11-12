@@ -17,6 +17,8 @@ export interface ShoppingItem {
   edited: boolean;
   manual: boolean;
   usedIn: string[]; // nombres de recetas
+  /** se necesita para algún plato de «Mis platos» */
+  fromMyDishes: boolean;
 }
 
 export interface ShoppingGroup {
@@ -61,20 +63,21 @@ export function formatAmount(food: Food, amount: number): string {
 /** Lista generada a partir del menú semanal + cambios manuales conservados. */
 export function buildShoppingList(data: AppData, monday: ISODate): { groups: ShoppingGroup[]; freeDishes: string[]; total: number; done: number } {
   const ov = data.shopping[monday] ?? emptyOverrides();
-  const acc = new Map<string, { amount: number; usedIn: Set<string> }>();
+  const acc = new Map<string, { amount: number; usedIn: Set<string>; mine: boolean }>();
   const freeDishes: string[] = [];
 
   for (const meal of data.plan[monday] ?? []) {
     if (meal.status === 'omitida' || !data.profile.mealSlots.includes(meal.slot)) continue;
     const r = getRecipe(data, meal.recipeId);
-    if (!r || r.custom) {
+    if (!r) {
       if (meal.customName) freeDishes.push(meal.customName);
       continue;
     }
     for (const ing of mealIngredients(data, meal)) {
-      const cur = acc.get(ing.foodId) ?? { amount: 0, usedIn: new Set<string>() };
+      const cur = acc.get(ing.foodId) ?? { amount: 0, usedIn: new Set<string>(), mine: false };
       cur.amount += ing.amount * meal.portion;
       cur.usedIn.add(recipeTitle(r));
+      if (r.custom) cur.mine = true;
       acc.set(ing.foodId, cur);
     }
   }
@@ -98,10 +101,11 @@ export function buildShoppingList(data: AppData, monday: ISODate): { groups: Sho
       edited,
       manual: false,
       usedIn: [...v.usedIn],
+      fromMyDishes: v.mine,
     });
   }
   for (const m of ov.manual) {
-    items.push({ key: m.id, name: m.name, qty: m.qty, autoQty: m.qty, amount: 0, unit: '', category: m.category, checked: m.checked, edited: false, manual: true, usedIn: [] });
+    items.push({ key: m.id, name: m.name, qty: m.qty, autoQty: m.qty, amount: 0, unit: '', category: m.category, checked: m.checked, edited: false, manual: true, usedIn: [], fromMyDishes: false });
   }
 
   const groups = CATEGORY_ORDER.map((category) => ({

@@ -21,6 +21,7 @@ Al abrirla por primera vez puedes **crear tu perfil** (cuestionario de 7 pasos, 
 | --- | --- |
 | **Hoy** | Saludo, selector de día, anillo de calorías y barras de macros que se recalculan al marcar/registrar, línea temporal de comidas con horarios, hábitos (agua, pasos, actividad, comidas, personalizados), resumen de actividad y peso |
 | **Plan** | Semana navegable, propuesta semanal con **Aceptar menú**, **Otra propuesta** (solo cambia lo no aceptado) y **Cambiar día**, avisos cuando el catálogo no permite cumplir todas las reglas, detalle de receta (ingredientes escalados, pasos, alérgenos, fibra, equivalencias), «Cambiar plato» con Sorpréndeme y deshacer |
+| **Mis platos** | «Crear mi plato»: nombre libre, ingredientes con cantidad y unidad (g, kg, ml, l, unidades, cucharadas cuando hay conversión fiable), raciones, foto, descripción y pasos opcionales; calorías, macros y fibra del plato completo y por ración en tiempo real; editar, duplicar y eliminar; registrar en Hoy por raciones (½, 1…) y añadir al menú; el historial guarda una copia de los valores |
 | **Recetas** | Biblioteca de 527 recetas con nombre comercial y descripción, buscador por nombre/ingrediente, filtros (categoría, cocina, tiempo, calorías, proteína, ingrediente principal, dificultad, dieta), favoritas, recientes, colecciones y «Sorpréndeme» con «Añadir al menú» |
 | **Registro** | Búsqueda local, favoritos, recientes, cantidades con raciones típicas, edición y borrado (con deshacer), alimentos personalizados con validación, Open Food Facts opcional, registro por foto/texto (modo demo honesto si no hay IA) |
 | **Compra** | Generada desde el menú, agrupada por secciones, suma cantidades, marca de comprado, edición de cantidades, productos manuales, modo tienda, copiar lista; los cambios manuales se conservan al modificar el menú |
@@ -48,6 +49,8 @@ src/
 api/assistant.ts    Backend seguro del asistente (Vercel Edge Function)
 supabase/           Esquema SQL con Row Level Security, preparado para migrar (0002: biblioteca)
 scripts/check-library.ts  Validación de la biblioteca y simulación del planificador
+scripts/check-dishes.ts   Pruebas de Mis platos (cálculo, plan, registro e historial)
+PROJECT_CONTEXT.md        Resumen técnico del proyecto
 ```
 
 - **Nutrición trazable**: las recetas no llevan calorías escritas a mano; se calculan desde ingredientes y cantidades. Los platos libres sin datos se marcan y no se suman.

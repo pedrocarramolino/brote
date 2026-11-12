@@ -10,7 +10,7 @@ import { n0, uid } from '../../lib/format';
 import { getRecipe, SLOT_META, slotsOrdered } from '../../services/catalog';
 import { addMacros, plannedMealNutrition, recipeFit, recipeNutrition, ZERO } from '../../services/nutrition';
 import { generateWeek, logReplacement } from '../../services/planner';
-import { recipeTitle } from '../../services/recipeMeta';
+import { recipeSubtitle, recipeTitle } from '../../services/recipeMeta';
 import { RecipeCover } from './RecipeBits';
 
 /**
@@ -99,7 +99,7 @@ export function AddToPlanSheet({ recipe, open, onClose, source = 'manual' }: { r
         <RecipeCover recipe={recipe} size={56} />
         <div className="min-w-0">
           <p className="text-[16px] font-semibold leading-snug">{recipeTitle(recipe)}</p>
-          <p className="truncate text-[13px] text-ink3">{recipe.name}</p>
+          {recipeSubtitle(recipe) && <p className="truncate text-[13px] text-ink3">{recipeSubtitle(recipe)}</p>}
         </div>
       </div>
       {!fit.ok && <p className="mb-3 rounded-[12px] bg-warnSoft px-3 py-2 text-[13px] text-warn">Atención: {fit.reasons.join(' · ')}.</p>}

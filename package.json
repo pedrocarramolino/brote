@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "typecheck": "tsc -b",
     "icons": "node scripts/icons.mjs",
-    "check:library": "esbuild scripts/check-library.ts --bundle --platform=node --log-level=warning --outfile=node_modules/.cache/check-library.cjs && node node_modules/.cache/check-library.cjs"
+    "check:library": "esbuild scripts/check-library.ts --bundle --platform=node --log-level=warning --outfile=node_modules/.cache/check-library.cjs && node node_modules/.cache/check-library.cjs",
+    "check:dishes": "esbuild scripts/check-dishes.ts --bundle --platform=node --log-level=warning --outfile=node_modules/.cache/check-dishes.cjs && node node_modules/.cache/check-dishes.cjs"
   },
   "dependencies": {
     "lucide-react": "0.460.0",

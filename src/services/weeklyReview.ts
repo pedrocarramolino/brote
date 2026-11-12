@@ -93,7 +93,7 @@ export function reviewMenu(data: AppData, draft: UserProfile, today: ISODate): M
     const recipe = getRecipe(d, meal.recipeId);
     const options: MenuDecision[] = [];
     let conflicts: string[] = [];
-    if (recipe && !recipe.custom) {
+    if (recipe) {
       const ings = mealIngredients(d, meal, { includeRemoved: true });
       const active = ings.filter((i) => !i.removed);
       const bad = conflictingFoods(d, active, draft);

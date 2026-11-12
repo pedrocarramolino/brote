@@ -2,13 +2,14 @@ import { ArrowLeftRight, Ban, Check, Minus, Plus, RotateCcw } from 'lucide-react
 import type { FoodLogEntry, ISODate, MealSlot, PlannedMeal } from '../../types';
 import { useData } from '../../store/AppStore';
 import { getFood, getRecipe, SLOT_META, slotsOrdered } from '../../services/catalog';
-import { foodMacros, plannedMealNutrition } from '../../services/nutrition';
+import { logEntryMacros, plannedMealNutrition } from '../../services/nutrition';
+import { servingsLabel } from '../../lib/format';
 import { cx } from '../../components/ui/primitives';
 import { MoreMenu } from '../../components/ui/Menu';
 import { n0 } from '../../lib/format';
 import { MacroInline, RecipeCover } from '../meals/RecipeBits';
 import { useMealActions } from '../meals/useMealActions';
-import { recipeTitle } from '../../services/recipeMeta';
+import { recipeSubtitle, recipeTitle } from '../../services/recipeMeta';
 
 const titleOf = (r: { title?: string; name: string } | undefined) => (r ? recipeTitle(r) : undefined);
 
@@ -81,13 +82,13 @@ export function MealTimeline({ date, meals, onOpenRecipe, onSwap, onAddFood, onE
                 </div>
                 {meal ? (
                   <div className="flex items-center gap-1 pb-2 pl-2 pr-1">
-                    <button type="button" data-open-recipe={meal.id} onClick={() => onOpenRecipe(meal)} className="flex min-w-0 flex-1 items-center gap-3 rounded-[14px] p-2 text-left hover:bg-surface2/60" disabled={!recipe || recipe.custom}>
+                    <button type="button" data-open-recipe={meal.id} onClick={() => onOpenRecipe(meal)} className="flex min-w-0 flex-1 items-center gap-3 rounded-[14px] p-2 text-left hover:bg-surface2/60" disabled={!recipe}>
                       <RecipeCover recipe={recipe} size={52} />
                       <span className="min-w-0 flex-1">
                         <span className={cx('block text-[16px] font-semibold leading-snug', meal.status === 'omitida' && 'line-through')}>
                           {titleOf(recipe) ?? meal.customName ?? 'Plato sin receta'}
                         </span>
-                        {recipe?.title && <span className="block truncate text-[13px] leading-snug text-ink3">{recipe.name}</span>}
+                        {recipe && recipeSubtitle(recipe) && <span className="block truncate text-[13px] leading-snug text-ink3">{recipeSubtitle(recipe)}</span>}
                         {n ? (
                           <MacroInline m={n} className="mt-0.5" />
                         ) : (
@@ -114,15 +115,16 @@ export function MealTimeline({ date, meals, onOpenRecipe, onSwap, onAddFood, onE
                 {logs.length > 0 && (
                   <ul className="mx-4 border-t border-line/60 py-1.5">
                     {logs.map((l) => {
-                      const f = getFood(data, l.foodId);
+                      const f = l.snapshot ? undefined : getFood(data, l.foodId);
+                      const m = logEntryMacros(data, l);
                       return (
                         <li key={l.id}>
-                          <button type="button" onClick={() => onEditLog(l)} className="flex min-h-[40px] w-full items-center justify-between gap-3 rounded-[8px] text-left text-[14px] hover:bg-surface2/60">
+                          <button type="button" onClick={() => onEditLog(l)} className="flex min-h-[40px] w-full items-center justify-between gap-3 rounded-[8px] text-left text-[14px] hover:bg-surface2/60" data-log-entry={l.recipeId ? 'plato' : 'alimento'}>
                             <span className="min-w-0 truncate">
-                              <span className="font-medium">{f?.name ?? 'Alimento eliminado'}</span>
-                              <span className="tabular text-ink3"> · {n0(l.amount)} {f?.unit}</span>
+                              <span className="font-medium">{l.snapshot ? l.snapshot.name : f?.name ?? 'Alimento eliminado'}</span>
+                              <span className="tabular text-ink3"> · {l.snapshot ? servingsLabel(l.amount) : `${n0(l.amount)} ${f?.unit ?? ''}`}</span>
                             </span>
-                            <span className="tabular shrink-0 text-ink2">{f ? `${n0(foodMacros(f, l.amount).kcal)} kcal` : '—'}</span>
+                            <span className="tabular shrink-0 text-ink2">{m ? `${n0(m.kcal)} kcal` : '—'}</span>
                           </button>
                         </li>
                       );

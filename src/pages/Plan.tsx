@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { ArrowLeftRight, BookOpen, CheckCheck, ChevronLeft, ChevronRight, Clock, Info, Lock, RefreshCw, Shuffle, Sparkles } from 'lucide-react';
+import { ArrowLeftRight, BookOpen, Plus, CheckCheck, ChevronLeft, ChevronRight, Clock, Info, Lock, RefreshCw, Shuffle, Sparkles } from 'lucide-react';
 import type { PlannedMeal, Recipe } from '../types';
 import { PageHeader } from '../components/layout/AppShell';
 import { Button, Card, EmptyState, IconButton, ProgressBar, SectionTitle, cx } from '../components/ui/primitives';
 import { useData, useStore, useWeek } from '../store/AppStore';
 import { useFeedback } from '../components/ui/Feedback';
 import { acceptWeek, planDiagnostics, regenerateDay, regenerateWeek } from '../services/planner';
-import { recipeTitle } from '../services/recipeMeta';
+import { recipeSubtitle, recipeTitle } from '../services/recipeMeta';
 import { addDays, formatLong, formatWeekRange, formatWeekdayShort, fromISO, startOfWeek, todayISO, weekDates } from '../lib/dates';
 import { n0 } from '../lib/format';
 import { navigate } from '../lib/router';
@@ -167,7 +167,7 @@ export function PlanPage({ dateParam }: { dateParam: string | null }) {
                             {m.accepted && m.status === 'pendiente' && <Lock size={11} className="text-accent" aria-label="Aceptado" />}
                           </span>
                           <span className="mt-0.5 block text-[16px] font-semibold leading-snug">{r ? recipeTitle(r) : m.customName}</span>
-                          {r?.title && <span className="block truncate text-[13px] leading-snug text-ink3">{r.name}</span>}
+                          {r && recipeSubtitle(r) && <span className="block truncate text-[13px] leading-snug text-ink3">{recipeSubtitle(r)}</span>}
                           {n ? <MacroInline m={n} className="mt-0.5" /> : <span className="mt-0.5 block text-[13px] text-warn">Sin valores verificados</span>}
                         </span>
                       </button>
@@ -238,6 +238,9 @@ function LibraryLink() {
         </span>
         <ChevronRight size={20} className="shrink-0 text-ink3" />
       </button>
+      <Button variant="secondary" className="mt-2 w-full" icon={<Plus size={18} />} onClick={() => navigate('recetas', { nuevo: '1' }, { push: true })} data-plan-create-dish>
+        Crear mi plato{data.customRecipes.length ? ` · ${data.customRecipes.length} guardados` : ''}
+      </Button>
     </section>
   );
 }

@@ -1,6 +1,6 @@
 import type React from 'react';
 import { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Clock, Heart, History, Search, Shuffle, SlidersHorizontal, X } from 'lucide-react';
+import { ChefHat, ChevronLeft, ChevronRight, Clock, Heart, History, Plus, Search, Shuffle, SlidersHorizontal, X } from 'lucide-react';
 import type { Cuisine, Difficulty, MainIngredient, Recipe, RecipeCategory } from '../types';
 import { PageHeader } from '../components/layout/AppShell';
 import { Badge, Button, Card, Chip, EmptyState, IconButton, Segmented, Toggle, cx } from '../components/ui/primitives';
@@ -18,6 +18,12 @@ import { RecipeCover } from '../features/meals/RecipeBits';
 import { RecipeSheet } from '../features/meals/RecipeSheet';
 import { AddToPlanSheet } from '../features/meals/AddToPlanSheet';
 import { SurpriseSheet } from '../features/meals/SurpriseSheet';
+import { DishEditor } from '../features/dishes/DishEditor';
+import { LogFoodSheet } from '../features/log/LogFoodSheet';
+import { userDishes } from '../services/dishes';
+import { navigate as go } from '../lib/router';
+import { todayISO } from '../lib/dates';
+import { slotsOrdered } from '../services/catalog';
 
 type TimeF = 'all' | '10' | '20' | '30' | '45';
 type KcalF = 'all' | 'lt250' | '250-450' | '450-650' | 'gt650';
@@ -35,11 +41,13 @@ interface Filters {
   compatible: boolean;
   favorites: boolean;
   recent: boolean;
+  /** solo «Mis platos» */
+  mine: boolean;
   /** colección activa (ver todas) */
   collection: string | null;
 }
 
-const EMPTY: Filters = { time: 'all', kcal: 'all', protein: 'all', mains: [], difficulty: [], diets: [], cuisines: [], compatible: false, favorites: false, recent: false, collection: null };
+const EMPTY: Filters = { time: 'all', kcal: 'all', protein: 'all', mains: [], difficulty: [], diets: [], cuisines: [], compatible: false, favorites: false, recent: false, mine: false, collection: null };
 
 const MAIN_GROUPS: MainIngredient[] = ['pollo', 'pavo', 'ternera', 'cerdo', 'pescado_blanco', 'pescado_azul', 'atun', 'marisco', 'huevo', 'lacteo', 'legumbre', 'proteina_vegetal', 'cereal', 'verdura', 'fruta'];
 
@@ -48,11 +56,11 @@ const KCAL_RANGE: Record<Exclude<KcalF, 'all'>, [number, number]> = { lt250: [0,
 function countActive(f: Filters) {
   return (
     Number(f.time !== 'all') + Number(f.kcal !== 'all') + Number(f.protein !== 'all') + f.mains.length + f.difficulty.length + f.diets.length + f.cuisines.length +
-    Number(f.compatible) + Number(f.favorites) + Number(f.recent) + Number(!!f.collection)
+    Number(f.compatible) + Number(f.favorites) + Number(f.recent) + Number(f.mine) + Number(!!f.collection)
   );
 }
 
-export function RecipesPage() {
+export function RecipesPage({ params }: { params?: URLSearchParams }) {
   const data = useData();
   const [q, setQ] = useState('');
   const [cat, setCat] = useState<RecipeCategory | null>(null);
@@ -62,6 +70,10 @@ export function RecipesPage() {
   const [open, setOpen] = useState<Recipe | null>(null);
   const [adding, setAdding] = useState<{ recipe: Recipe; source: 'manual' | 'sorpresa' } | null>(null);
   const [surpriseOpen, setSurpriseOpen] = useState(false);
+  const [editor, setEditor] = useState<{ recipe: Recipe | null } | null>(params?.get('nuevo') ? { recipe: null } : null);
+  const [logDish, setLogDish] = useState<Recipe | null>(null);
+  const mine = useMemo(() => userDishes(data), [data]);
+  const openRecipe = open ? (open.custom ? mine.find((r) => r.id === open.id) ?? null : open) : null;
 
   const library = useMemo(() => allRecipes(data).filter((r) => !r.custom), [data]);
 
@@ -82,7 +94,7 @@ export function RecipesPage() {
     const favs = new Set(data.favorites.recipes);
     const recentOrder = new Map(history.map((h, i) => [h.recipe.id, i]));
     const inCollection = collectionIds ? new Map(collectionIds.map((id, i) => [id, i])) : null;
-    const res = library.filter((r) => {
+    const res = (filters.mine ? mine : library).filter((r) => {
       if (cat && r.category !== cat) return false;
       if (filters.favorites && !favs.has(r.id)) return false;
       if (filters.recent && !recentOrder.has(r.id)) return false;
@@ -118,7 +130,7 @@ export function RecipesPage() {
       nombre: (a, b) => recipeTitle(a).localeCompare(recipeTitle(b), 'es'),
     };
     return res.sort(by[sort]);
-  }, [library, q, cat, filters, sort, data, history, collectionIds]);
+  }, [library, mine, q, cat, filters, sort, data, history, collectionIds]);
   const browsing = !q.trim() && !cat && countActive(filters) === 0;
 
   const active = countActive(filters);
@@ -134,11 +146,16 @@ export function RecipesPage() {
           </button>
         }
         title="Recetas"
-        subtitle={`${library.length} recetas · cantidades por ración y valores calculados por ingredientes`}
+        subtitle={`${library.length} recetas${mine.length ? ` · ${mine.length} ${mine.length === 1 ? 'tuya' : 'tuyas'}` : ''}`}
         actions={
-          <Button variant="tinted" icon={<Shuffle size={18} />} onClick={() => setSurpriseOpen(true)} data-open-surprise>
-            Sorpréndeme
-          </Button>
+          <>
+            <IconButton label="Sorpréndeme" variant="secondary" onClick={() => setSurpriseOpen(true)} data-open-surprise>
+              <Shuffle size={19} />
+            </IconButton>
+            <Button icon={<Plus size={18} />} onClick={() => setEditor({ recipe: null })} data-create-dish>
+              Crear mi plato
+            </Button>
+          </>
         }
       />
 
@@ -171,6 +188,9 @@ export function RecipesPage() {
       </div>
 
       <div className="no-scrollbar -mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0" data-no-swipe>
+        <Chip selected={filters.mine} onClick={() => set('mine', !filters.mine)}>
+          <ChefHat size={14} className="mr-1" /> Mis platos <span className="tabular ml-1 text-ink3" data-my-dishes-count>{mine.length}</span>
+        </Chip>
         <Chip selected={filters.favorites} onClick={() => set('favorites', !filters.favorites)}>
           <Heart size={14} className="mr-1" /> Favoritas <span className="tabular ml-1 text-ink3">{data.favorites.recipes.length}</span>
         </Chip>
@@ -178,6 +198,42 @@ export function RecipesPage() {
           <History size={14} className="mr-1" /> Recientes <span className="tabular ml-1 text-ink3">{history.length}</span>
         </Chip>
       </div>
+
+      {browsing && (
+        <section className="mb-5" aria-labelledby="mis-platos" data-my-dishes-section>
+          <div className="mb-2 flex items-end justify-between gap-2">
+            <div className="min-w-0">
+              <h2 id="mis-platos" className="text-[17px] font-bold tracking-tight">Mis platos</h2>
+              <p className="truncate text-[13px] text-ink3">{mine.length ? 'Tus recetas, con sus calorías calculadas' : 'Crea tus recetas con sus ingredientes y cantidades'}</p>
+            </div>
+            {mine.length > 0 && (
+              <button type="button" className="inline-flex shrink-0 items-center text-[14px] font-semibold text-accent" onClick={() => set('mine', true)}>
+                Ver {mine.length} <ChevronRight size={16} />
+              </button>
+            )}
+          </div>
+          <ul className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0" data-no-swipe>
+            <li className="w-[148px] shrink-0">
+              <button type="button" onClick={() => setEditor({ recipe: null })} className="press flex h-[96px] w-full flex-col items-center justify-center gap-1 rounded-[14px] border-2 border-dashed border-accent/40 bg-accentSoft/40 text-accent-deep">
+                <Plus size={24} />
+                <span className="text-[14px] font-semibold">Crear mi plato</span>
+              </button>
+            </li>
+            {mine.slice(0, 10).map((r) => {
+              const m = recipeMacros(data, r);
+              return (
+                <li key={r.id} className="w-[148px] shrink-0">
+                  <button type="button" onClick={() => setOpen(r)} className="press block w-full text-left" data-my-dish={r.id}>
+                    <RecipeCover recipe={r} size="full" className="h-[96px] w-full" rounded="rounded-[14px]" />
+                    <span className="mt-1.5 line-clamp-2 text-[14px] font-semibold leading-snug">{recipeTitle(r)}</span>
+                    <span className="tabular block text-[12px] text-ink3">{n0(m.kcal)} kcal/ración</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       {browsing && (
         <div className="mb-5 space-y-5" data-collections>
@@ -233,6 +289,7 @@ export function RecipesPage() {
       {active > 0 && (
         <div className="mb-3 flex flex-wrap gap-1.5">
           {filters.collection && <ActiveChip onClear={() => set('collection', null)}>{COLLECTIONS.find((c) => c.id === filters.collection)?.title}</ActiveChip>}
+          {filters.mine && <ActiveChip onClear={() => set('mine', false)}>Mis platos</ActiveChip>}
           {filters.favorites && <ActiveChip onClear={() => set('favorites', false)}>Favoritas</ActiveChip>}
           {filters.recent && <ActiveChip onClear={() => set('recent', false)}>Recientes</ActiveChip>}
           {filters.cuisines.map((c) => <ActiveChip key={c} onClear={() => set('cuisines', filters.cuisines.filter((x) => x !== c))}>Cocina {CUISINE_LABEL[c].toLowerCase()}</ActiveChip>)}
@@ -250,7 +307,9 @@ export function RecipesPage() {
       {list.length === 0 ? (
         <Card>
           <EmptyState icon={filters.favorites ? <Heart size={24} /> : <Search size={24} />} title="Sin resultados">
-            {filters.favorites && !data.favorites.recipes.length
+            {filters.mine && !mine.length
+              ? 'Todavía no has creado ningún plato. Pulsa «Crear mi plato» y añade sus ingredientes.'
+              : filters.favorites && !data.favorites.recipes.length
               ? 'Abre una receta y pulsa el corazón para guardarla.'
               : filters.recent && !history.length
                 ? 'Aquí aparecerán las recetas de tu menú a medida que pasen los días.'
@@ -273,7 +332,7 @@ export function RecipesPage() {
                         <span className="min-w-0 flex-1 text-[15px] font-semibold leading-snug">{recipeTitle(r)}</span>
                         {fav && <Heart size={14} className="mt-1 shrink-0 fill-danger text-danger" aria-label="Favorita" />}
                       </span>
-                      {r.title && <span className="line-clamp-1 text-[13px] leading-snug text-ink3">{r.name}</span>}
+                      {(r.custom ? r.description : r.title ? r.name : undefined) && <span className="line-clamp-1 text-[13px] leading-snug text-ink3">{r.custom ? r.description : r.name}</span>}
                       <span className="tabular mt-0.5 flex flex-wrap gap-x-2 text-[13px] text-ink2">
                         <span className="font-semibold text-ink">{n0(m.kcal)} kcal</span>
                         <span className="text-protein">P {n0(m.protein)} g</span>
@@ -343,10 +402,25 @@ export function RecipesPage() {
       </Sheet>
 
       <RecipeSheet
-        recipe={open ?? undefined}
-        open={!!open}
+        recipe={openRecipe ?? undefined}
+        open={!!openRecipe}
         onClose={() => setOpen(null)}
-        onAddToPlan={open ? () => { setAdding({ recipe: open, source: 'manual' }); setOpen(null); } : undefined}
+        onAddToPlan={openRecipe ? () => { setAdding({ recipe: openRecipe, source: 'manual' }); setOpen(null); } : undefined}
+        onEditDish={(r) => { setOpen(null); setEditor({ recipe: r }); }}
+        onLogDish={openRecipe?.custom ? (r) => { setOpen(null); setLogDish(r); } : undefined}
+      />
+      <DishEditor
+        open={!!editor}
+        recipe={editor?.recipe}
+        onClose={() => { setEditor(null); if (params?.get('nuevo')) go('recetas'); }}
+        onSaved={() => set('mine', true)}
+      />
+      <LogFoodSheet
+        open={!!logDish}
+        onClose={() => setLogDish(null)}
+        date={todayISO()}
+        slot={defaultSlotFor(data.profile.mealSlots, logDish)}
+        initialDish={logDish}
       />
       <SurpriseSheet
         open={surpriseOpen}
@@ -381,4 +455,11 @@ function ActiveChip({ children, onClear }: { children: React.ReactNode; onClear:
       </IconButton>
     </span>
   );
+}
+
+/** Comida en la que registrar un plato hoy: la de su categoría si la usa el usuario, si no la primera. */
+function defaultSlotFor(slots: import('../types').MealSlot[], r: Recipe | null) {
+  const ordered = slotsOrdered(slots);
+  const pref = r?.slots.find((x) => ordered.includes(x));
+  return pref ?? ordered[0] ?? 'comida';
 }

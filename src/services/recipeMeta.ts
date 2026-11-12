@@ -114,3 +114,7 @@ export function recipeMatches(data: Pick<AppData, 'customFoods'>, r: Recipe, nor
   const hay = `${norm(r.title ?? '')} ${norm(r.name)} ${r.ingredients.map((i) => norm(getFood(data, i.foodId)?.name ?? '')).join(' ')}`;
   return words.every((w) => hay.includes(w));
 }
+
+/** Línea secundaria de una receta: la descripción del plato (biblioteca) o la del usuario (Mis platos). */
+export const recipeSubtitle = (r: Pick<Recipe, 'custom' | 'description' | 'title' | 'name'>): string | undefined =>
+  r.custom ? r.description : r.title ? r.name : undefined;

@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeftRight, CalendarPlus, Check, ChevronDown, Clock, Heart, Info, RotateCcw, Trash2, Users } from 'lucide-react';
+import { ArrowLeftRight, CalendarPlus, Check, ChevronDown, Clock, Copy, Heart, Info, PencilLine, RotateCcw, Trash2, UtensilsCrossed, Users } from 'lucide-react';
+import { MoreMenu } from '../../components/ui/Menu';
+import { useFeedback } from '../../components/ui/Feedback';
+import { deleteDish, duplicateDish } from '../../services/dishes';
+import { todayISO } from '../../lib/dates';
 import type { PlannedMeal, Recipe } from '../../types';
 import { Sheet } from '../../components/ui/Sheet';
 import { Badge, Button, IconButton, Stepper, cx } from '../../components/ui/primitives';
@@ -22,12 +26,16 @@ interface Props {
   onSwap?: () => void;
   /** Biblioteca: abre la elección de día y comida para añadir la receta al menú */
   onAddToPlan?: () => void;
+  /** Mis platos: editar y registrar en Hoy */
+  onEditDish?: (r: Recipe) => void;
+  onLogDish?: (r: Recipe) => void;
 }
 
-export function RecipeSheet({ recipe, open, onClose, meal, onSwap, onAddToPlan }: Props) {
+export function RecipeSheet({ recipe, open, onClose, meal, onSwap, onAddToPlan, onEditDish, onLogDish }: Props) {
   const data = useData();
   const { mutate } = useStore();
   const actions = useMealActions();
+  const { toast, confirm } = useFeedback();
   const [openIng, setOpenIng] = useState<string | null>(null);
   const [whole, setWhole] = useState(false);
   useEffect(() => setWhole(false), [recipe?.id, open]);
@@ -46,6 +54,26 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap, onAddToPlan }
   const inMeal = new Set(ingredients.map((i) => i.foodId));
   const fav = data.favorites.recipes.includes(recipe.id);
 
+  const mine = !!recipe.custom;
+  const duplicate = () => {
+    let copyName = '';
+    mutate((d) => { const c = duplicateDish(d, recipe.id); copyName = c?.title ?? ''; });
+    toast(`Copia creada en Mis platos${copyName ? `: ${copyName}` : ''}`);
+    onClose();
+  };
+  const remove = async () => {
+    const ok = await confirm({
+      title: 'Eliminar plato',
+      message: `«${recipe.title ?? recipe.name}» se quitará de Mis platos. Lo que ya registraste o planificaste con él conserva sus valores.`,
+      confirmLabel: 'Eliminar',
+      destructive: true,
+    });
+    if (!ok) return;
+    mutate((d) => deleteDish(d, recipe.id, todayISO()));
+    toast('Plato eliminado');
+    onClose();
+  };
+
   const toggleFav = () =>
     mutate((d) => {
       const list = d.favorites.recipes;
@@ -60,9 +88,21 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap, onAddToPlan }
       size="lg"
       subtitle={meal ? `${SLOT_META[meal.slot].label} · ${meal.status === 'hecha' ? 'Completada' : meal.status === 'omitida' ? 'Omitida' : 'Pendiente'}` : recipe.slots.map((s) => SLOT_META[s].label).join(' · ')}
       headerAction={
-        <IconButton label={fav ? 'Quitar de favoritas' : 'Guardar en favoritas'} onClick={toggleFav} variant="secondary" className="!h-9 !w-9">
-          <Heart size={18} className={cx(fav && 'fill-danger text-danger')} />
-        </IconButton>
+        <>
+          {mine && (
+            <MoreMenu
+              label="Opciones del plato"
+              items={[
+                ...(onEditDish ? [{ label: 'Editar', icon: <PencilLine size={18} />, onSelect: () => onEditDish(recipe) }] : []),
+                { label: 'Duplicar', icon: <Copy size={18} />, onSelect: duplicate },
+                { label: 'Eliminar', icon: <Trash2 size={18} />, onSelect: () => void remove(), destructive: true },
+              ]}
+            />
+          )}
+          <IconButton label={fav ? 'Quitar de favoritas' : 'Guardar en favoritas'} onClick={toggleFav} variant="secondary" className="!h-9 !w-9">
+            <Heart size={18} className={cx(fav && 'fill-danger text-danger')} />
+          </IconButton>
+        </>
       }
       footer={
         meal ? (
@@ -84,18 +124,30 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap, onAddToPlan }
               {meal.status === 'hecha' ? 'Pendiente' : 'Marcar hecha'}
             </Button>
           </div>
-        ) : onAddToPlan ? (
-          <Button className="w-full" icon={<CalendarPlus size={18} />} onClick={onAddToPlan} data-add-to-plan>
-            Añadir al menú
-          </Button>
+        ) : onAddToPlan || onLogDish ? (
+          <div className="flex gap-2">
+            {onLogDish && (
+              <Button variant="secondary" className="min-w-0 flex-1" icon={<UtensilsCrossed size={18} />} onClick={() => onLogDish(recipe)} data-log-dish>
+                Registrar hoy
+              </Button>
+            )}
+            {onAddToPlan && (
+              <Button className="min-w-0 flex-[1.3]" icon={<CalendarPlus size={18} />} onClick={onAddToPlan} data-add-to-plan>
+                Añadir al menú
+              </Button>
+            )}
+          </div>
         ) : undefined
       }
     >
-      <RecipeCover recipe={recipe} size="full" className="mb-3 h-40 w-full" rounded="rounded-[18px]" labelled />
-      {recipe.title && <p className="mb-3 text-[16px] leading-snug text-ink2" data-recipe-description>{recipe.name}</p>}
+      <RecipeCover recipe={recipe} size="full" className="mb-3 h-40 w-full" rounded="rounded-[18px]" labelled={!recipe.imageUrl} />
+      {mine && <p className="mb-2"><Badge tone="accent">Mi plato</Badge></p>}
+      {(mine ? recipe.description : recipe.title ? recipe.name : undefined) && (
+        <p className="mb-3 text-[16px] leading-snug text-ink2" data-recipe-description>{mine ? recipe.description : recipe.name}</p>
+      )}
 
       <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[14px] text-ink2">
-        <span className="inline-flex items-center gap-1.5"><Clock size={16} /> {recipe.minutes} min</span>
+        {recipe.minutes > 0 && <span className="inline-flex items-center gap-1.5"><Clock size={16} /> {recipe.minutes} min</span>}
         <span className="inline-flex items-center gap-1.5"><Users size={16} /> {meal ? (portion === 1 ? '1 ración' : `${n1(portion)} raciones`) : `Receta para ${recipe.servings} ${recipe.servings === 1 ? 'ración' : 'raciones'}`}</span>
         <span>{CATEGORY_META[recipe.category].label} · {DIFFICULTY_LABEL[recipe.difficulty]} · {MAIN_LABEL[recipe.main]}{recipe.cuisine ? ` · Cocina ${CUISINE_LABEL[recipe.cuisine].toLowerCase()}` : ''}</span>
       </div>

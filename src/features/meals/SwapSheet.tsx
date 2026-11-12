@@ -9,7 +9,9 @@ import { getFood, SLOT_META } from '../../services/catalog';
 import { n0, normalize } from '../../lib/format';
 import { surpriseRecipe } from '../../services/planner';
 import { recipeNutrition } from '../../services/nutrition';
-import { CATEGORY_META, recipeMatches, recipeTitle } from '../../services/recipeMeta';
+import { CATEGORY_META, recipeMatches, recipeSubtitle, recipeTitle } from '../../services/recipeMeta';
+import { userDishes } from '../../services/dishes';
+import { recipeFit } from '../../services/nutrition';
 import { MacroInline, RecipeCover } from './RecipeBits';
 import { useMealActions } from './useMealActions';
 
@@ -31,7 +33,7 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
   const [freeName, setFreeName] = useState('');
   const [freeError, setFreeError] = useState<string | null>(null);
   const [q, setQ] = useState('');
-  const [scope, setScope] = useState<'slot' | 'all'>('slot');
+  const [scope, setScope] = useState<'slot' | 'all' | 'mine'>('slot');
   const [maxMin, setMaxMin] = useState<0 | 15 | 30>(0);
   const [shown, setShown] = useState(25);
   const [surprised, setSurprised] = useState<Set<string>>(new Set());
@@ -50,7 +52,27 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
     }
   }, [open, meal?.id]);
 
-  const result = useMemo(() => (meal ? findAlternatives(data, meal, 1000, { anySlot: scope === 'all' }) : null), [data, meal, scope]);
+  const result = useMemo(() => {
+    if (!meal) return null;
+    const res = findAlternatives(data, meal, scope === 'mine' ? 0 : 1000, { anySlot: scope === 'all' });
+    if (scope !== 'mine') return res;
+    // Mis platos: todos los del usuario (avisando si alguno no encaja con el perfil)
+    const om = res.original.macros;
+    const alternatives = userDishes(data)
+      .filter((r) => r.id !== meal.recipeId)
+      .map((r) => {
+        const macros = recipeNutrition(data, r, meal.portion).macros;
+        const fit = recipeFit(data, r, data.profile);
+        return {
+          recipe: r,
+          macros,
+          score: 0,
+          reasons: fit.ok ? ['Mi plato'] : ['Mi plato', `Requiere revisar: ${fit.reasons[0].toLowerCase()}`],
+          delta: om ? { kcal: macros.kcal - om.kcal, protein: macros.protein - om.protein, carbs: macros.carbs - om.carbs, fat: macros.fat - om.fat } : null,
+        };
+      });
+    return { ...res, alternatives, excludedCount: 0 };
+  }, [data, meal, scope]);
   const filtered = useMemo(() => {
     if (!result) return [];
     const nq = normalize(q.trim());
@@ -142,7 +164,7 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
               label="Qué recetas mostrar"
               value={scope}
               onChange={(v) => { setScope(v); setShown(25); }}
-              options={[{ value: 'slot', label: SLOT_META[meal.slot].label }, { value: 'all', label: 'Todas las recetas' }]}
+              options={[{ value: 'slot', label: SLOT_META[meal.slot].label }, { value: 'all', label: 'Todas' }, { value: 'mine', label: 'Mis platos' }]}
             />
             <div className="flex flex-wrap gap-2">
               {([0, 15, 30] as const).map((m) => (
@@ -153,7 +175,9 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
           </div>
 
           {alternatives.length === 0 ? (
-            <p className="py-8 text-center text-[15px] text-ink2">No hay recetas compatibles con estos filtros. Prueba con «Todas las recetas» o añade un plato libre.</p>
+            <p className="py-8 text-center text-[15px] text-ink2">
+              {scope === 'mine' ? 'Aún no tienes platos propios. Créalos en Recetas › Crear mi plato.' : 'No hay recetas compatibles con estos filtros. Prueba con «Todas» o añade un plato libre.'}
+            </p>
           ) : (
             <ul className="space-y-2">
               {alternatives.slice(0, shown).map((a) => (
@@ -168,7 +192,7 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
                       <span className="block text-[16px] font-semibold leading-snug">{recipeTitle(a.recipe)}</span>
                       <span className="block truncate text-[12px] text-ink3">
                         {scope === 'all' && `${CATEGORY_META[a.recipe.category].label} · `}
-                        {a.recipe.title ? a.recipe.name : a.recipe.ingredients.slice(0, 4).map((i) => getFood(data, i.foodId)?.name.toLowerCase()).join(', ')}
+                        {a.recipe.custom ? a.recipe.description ?? 'Mi plato' : a.recipe.title ? a.recipe.name : a.recipe.ingredients.slice(0, 4).map((i) => getFood(data, i.foodId)?.name.toLowerCase()).join(', ')}
                       </span>
                       <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[13px]">
                         <span className="tabular text-ink2">{n0(a.macros.kcal)} kcal</span>
@@ -216,7 +240,7 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
             <div className="min-w-0">
               {selected.reasons.includes('Sorpréndeme') && <p className="text-[12px] font-semibold uppercase tracking-wide text-accent">Sorpréndeme</p>}
               <h3 className="text-[18px] font-bold leading-snug">{recipeTitle(selected.recipe)}</h3>
-              {selected.recipe.title && <p className="text-[14px] leading-snug text-ink2">{selected.recipe.name}</p>}
+              {recipeSubtitle(selected.recipe) && <p className="text-[14px] leading-snug text-ink2">{recipeSubtitle(selected.recipe)}</p>}
               <p className="text-[13px] text-ink3">{selected.recipe.minutes} min · {selected.recipe.ingredients.length} ingredientes</p>
             </div>
           </div>

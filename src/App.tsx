@@ -40,7 +40,7 @@ export default function App() {
       {route === 'perfil' && <ProfilePage section={params.get('s')} />}
       {route === 'asistente' && <AssistantPage />}
       {route === 'actividad' && <ActivityPage weekParam={params.get('w')} />}
-      {route === 'recetas' && <RecipesPage />}
+      {route === 'recetas' && <RecipesPage params={params} />}
     </AppShell>
   );
 }

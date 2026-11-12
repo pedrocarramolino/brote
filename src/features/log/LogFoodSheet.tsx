@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, ChevronLeft, ChevronRight, Globe, Heart, Plus, RotateCw, Search, Trash2 } from 'lucide-react';
-import type { Food, FoodLogEntry, ISODate, MealSlot } from '../../types';
+import type { Food, FoodLogEntry, ISODate, MealSlot, Recipe } from '../../types';
 import { Sheet } from '../../components/ui/Sheet';
 import { Badge, Button, IconButton, Segmented, SelectField, TextField, cx } from '../../components/ui/primitives';
 import { useData, useStore } from '../../store/AppStore';
 import { getFood, SLOT_META, slotsOrdered } from '../../services/catalog';
-import { foodMacros } from '../../services/nutrition';
+import { foodMacros, recipeNutrition, scaleMacros } from '../../services/nutrition';
+import { dishLogEntry, userDishes } from '../../services/dishes';
+import { recipeTitle } from '../../services/recipeMeta';
+import { RecipeCover } from '../meals/RecipeBits';
 import { openFoodFactsProvider, searchLocal, SOURCE_LABEL } from '../../services/foodDatabase';
-import { n0, parseDecimal } from '../../lib/format';
+import { n0, parseDecimal, servingsLabel } from '../../lib/format';
 import { relativeDayLabel } from '../../lib/dates';
 import { MacroGrid } from '../meals/RecipeBits';
 import { useMealActions } from '../meals/useMealActions';
@@ -20,16 +23,22 @@ interface Props {
   slot: MealSlot;
   editEntry?: FoodLogEntry | null;
   onOpenPhoto?: () => void;
+  /** abrir directamente con un plato de «Mis platos» para registrarlo */
+  initialDish?: Recipe | null;
+  /** abrir el creador de platos */
+  onCreateDish?: () => void;
 }
 
-type Tab = 'buscar' | 'favoritos' | 'recientes';
+type Tab = 'buscar' | 'favoritos' | 'recientes' | 'platos';
 
-export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry, onOpenPhoto }: Props) {
+export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry, onOpenPhoto, initialDish, onCreateDish }: Props) {
   const data = useData();
   const { mutate } = useStore();
   const { addLog, updateLog, removeLog } = useMealActions();
 
-  const [view, setView] = useState<'list' | 'amount' | 'custom'>('list');
+  const [view, setView] = useState<'list' | 'amount' | 'custom' | 'dish'>('list');
+  const [dish, setDish] = useState<Recipe | null>(null);
+  const [servingsText, setServingsText] = useState('1');
   const [tab, setTab] = useState<Tab>('buscar');
   const [query, setQuery] = useState('');
   const [food, setFood] = useState<Food | null>(null);
@@ -48,7 +57,16 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
     setQuery('');
     setTab('buscar');
     setOffState({ status: 'idle', items: [] });
-    if (editEntry) {
+    setDish(null);
+    if (editEntry?.snapshot) {
+      setServingsText(String(editEntry.amount).replace('.', ','));
+      setSlot(editEntry.slot);
+      setView('dish');
+    } else if (initialDish) {
+      setDish(initialDish);
+      setServingsText('1');
+      setView('dish');
+    } else if (editEntry) {
       const f = getFood(data, editEntry.foodId) ?? null;
       setFood(f);
       setAmountText(String(editEntry.amount));
@@ -60,7 +78,7 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
     }
     setAmountError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, editEntry?.id]);
+  }, [open, editEntry?.id, initialDish?.id]);
 
   const local = useMemo(() => searchLocal(data, query).slice(0, 40), [data, query]);
   const favorites = useMemo(() => data.favorites.foods.map((id) => getFood(data, id)).filter((f): f is Food => !!f), [data]);
@@ -111,6 +129,19 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
     setView('amount');
   };
 
+  const servings = parseDecimal(servingsText);
+  const validServings = Number.isFinite(servings) && servings > 0 && servings <= 20;
+  const dishPerServing = editEntry?.snapshot ? editEntry.snapshot.perServing : dish ? recipeNutrition(data, dish).macros : null;
+  const dishPreview = dishPerServing && validServings ? scaleMacros(dishPerServing, servings) : null;
+  const myDishes = useMemo(() => userDishes(data), [data]);
+
+  const saveDish = () => {
+    if (!validServings) return;
+    if (editEntry) updateLog(editEntry.id, { amount: servings, slot });
+    else if (dish) addLog(dishLogEntry(data, dish, { date, slot, servings }));
+    onClose();
+  };
+
   const save = () => {
     if (!food) return;
     if (!validAmount) {
@@ -141,10 +172,23 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
     <Sheet
       open={open}
       onClose={onClose}
-      title={editEntry ? 'Editar registro' : view === 'custom' ? 'Alimento personalizado' : 'Añadir alimento'}
+      title={editEntry ? 'Editar registro' : view === 'custom' ? 'Alimento personalizado' : view === 'dish' ? 'Registrar mi plato' : 'Añadir alimento'}
       subtitle={`${relativeDayLabel(date)} · ${SLOT_META[slot].label}`}
       footer={
-        view === 'amount' && food ? (
+        view === 'dish' && (dish || editEntry) ? (
+          <div className="flex gap-2">
+            {editEntry ? (
+              <Button variant="destructive" icon={<Trash2 size={18} />} onClick={() => { removeLog(editEntry); onClose(); }} data-remove-log>
+                Quitar
+              </Button>
+            ) : !initialDish ? (
+              <Button variant="secondary" icon={<ChevronLeft size={18} />} onClick={() => setView('list')}>Volver</Button>
+            ) : null}
+            <Button className="flex-1" onClick={saveDish} disabled={!validServings} data-confirm-log-dish>
+              {editEntry ? 'Guardar cambios' : 'Registrar'}
+            </Button>
+          </div>
+        ) : view === 'amount' && food ? (
           <div className="flex gap-2">
             {editEntry ? (
               <Button variant="destructive" icon={<Trash2 size={18} />} onClick={() => { removeLog(editEntry); onClose(); }}>
@@ -182,7 +226,7 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
               label="Origen"
               value={tab}
               onChange={setTab}
-              options={[{ value: 'buscar', label: 'Todos' }, { value: 'favoritos', label: 'Favoritos' }, { value: 'recientes', label: 'Recientes' }]}
+              options={[{ value: 'buscar', label: 'Todos' }, { value: 'platos', label: 'Mis platos' }, { value: 'favoritos', label: 'Favoritos' }, { value: 'recientes', label: 'Recientes' }]}
             />
           </div>
 
@@ -197,7 +241,32 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
             </button>
           </div>
 
-          {list.length === 0 ? (
+          {tab === 'platos' ? (
+            myDishes.length === 0 ? (
+              <div className="py-8 text-center text-[15px] text-ink2">
+                <p>Aún no has creado platos. Crea uno una vez y regístralo siempre que quieras sin volver a escribir los ingredientes.</p>
+                {onCreateDish && <Button className="mt-3" icon={<Plus size={18} />} onClick={onCreateDish}>Crear mi plato</Button>}
+              </div>
+            ) : (
+              <ul className="divide-y divide-line/60" data-my-dishes>
+                {myDishes.map((r) => {
+                  const m = recipeNutrition(data, r).macros;
+                  return (
+                    <li key={r.id}>
+                      <button type="button" onClick={() => { setDish(r); setServingsText('1'); setView('dish'); }} className="flex min-h-[60px] w-full items-center gap-3 py-2 text-left hover:bg-surface2/50" data-pick-dish={r.id}>
+                        <RecipeCover recipe={r} size={44} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[16px] font-medium">{recipeTitle(r)}</span>
+                          <span className="tabular block text-[13px] text-ink3">{n0(m.kcal)} kcal por ración · P {n0(m.protein)} · H {n0(m.carbs)} · G {n0(m.fat)}</span>
+                        </span>
+                        <ChevronRight size={18} className="text-ink3" aria-hidden="true" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )
+          ) : list.length === 0 ? (
             <p className="py-8 text-center text-[15px] text-ink2">
               {tab === 'favoritos' ? 'Aún no tienes alimentos favoritos. Márcalos con el corazón al añadirlos.' : tab === 'recientes' ? 'Todavía no has registrado alimentos.' : 'Sin resultados en la base local. Puedes crear el alimento.'}
             </p>
@@ -281,6 +350,44 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
         </div>
       )}
 
+      {view === 'dish' && (dish || editEntry?.snapshot) && (
+        <div className="anim-fade" data-log-dish>
+          <div className="mb-4 flex items-center gap-3">
+            {dish && <RecipeCover recipe={dish} size={52} />}
+            <div className="min-w-0">
+              <h3 className="text-[19px] font-bold leading-snug">{dish ? recipeTitle(dish) : editEntry!.snapshot!.name}</h3>
+              <p className="tabular text-[13px] text-ink3">{dishPerServing ? `${n0(dishPerServing.kcal)} kcal por ración` : ''}{dish ? ` · el plato completo son ${dish.servings} ${dish.servings === 1 ? 'ración' : 'raciones'}` : ''}</p>
+            </div>
+          </div>
+          <TextField
+            label="Raciones que tomas"
+            inputMode="decimal"
+            value={servingsText}
+            onChange={(e) => setServingsText(e.target.value)}
+            suffix={validServings ? (servings === 1 ? 'ración' : 'raciones') : ''}
+            error={servingsText && !validServings ? 'Introduce un número entre 0,1 y 20.' : undefined}
+            onKeyDown={(e) => e.key === 'Enter' && saveDish()}
+            data-servings
+          />
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {[0.5, 1, 1.5, 2].map((v) => (
+              <button key={v} type="button" onClick={() => setServingsText(String(v).replace('.', ','))} className={cx('press h-9 rounded-full px-3 text-[14px] font-medium', servings === v ? 'bg-accent text-accentInk' : 'bg-surface2')} data-servings-chip={v}>
+                {servingsLabel(v)}
+              </button>
+            ))}
+          </div>
+          <SelectField label="Comida" className="mt-4" value={slot} onChange={(e) => setSlot(e.target.value as MealSlot)}>
+            {slots.map((s) => <option key={s} value={s}>{SLOT_META[s].label}</option>)}
+          </SelectField>
+          <div className="mt-5" data-dish-preview>{dishPreview ? <MacroGrid m={dishPreview} /> : <p className="text-[14px] text-ink3">Introduce las raciones para ver los valores.</p>}</div>
+          <p className="mt-2 text-[12px] leading-snug text-ink3">
+            {editEntry
+              ? `Valores guardados al registrarlo${editEntry.snapshot ? ` (${new Date(editEntry.snapshot.at).toLocaleDateString('es-ES')})` : ''}: si editas el plato, este registro no cambia.`
+              : 'Se guarda una copia de estos valores: si más adelante editas el plato, lo que ya registraste no cambia.'}
+          </p>
+        </div>
+      )}
+
       {view === 'custom' && (
         <CustomFoodForm
           onCancel={() => setView('list')}
@@ -291,7 +398,7 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
   );
 }
 
-function FoodRow({ food, onClick }: { food: Food; onClick: () => void }) {
+export function FoodRow({ food, onClick }: { food: Food; onClick: () => void }) {
   return (
     <li>
       <button type="button" onClick={onClick} className="flex min-h-[56px] w-full items-center gap-3 py-2 text-left hover:bg-surface2/50">
