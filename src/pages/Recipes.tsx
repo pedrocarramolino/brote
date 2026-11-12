@@ -70,7 +70,7 @@ export function RecipesPage({ params }: { params?: URLSearchParams }) {
   const [open, setOpen] = useState<Recipe | null>(null);
   const [adding, setAdding] = useState<{ recipe: Recipe; source: 'manual' | 'sorpresa' } | null>(null);
   const [surpriseOpen, setSurpriseOpen] = useState(false);
-  const [editor, setEditor] = useState<{ recipe: Recipe | null } | null>(params?.get('nuevo') ? { recipe: null } : null);
+  const [editor, setEditor] = useState<{ recipe: Recipe | null; name?: string } | null>(params?.get('nuevo') ? { recipe: null } : null);
   const [logDish, setLogDish] = useState<Recipe | null>(null);
   const mine = useMemo(() => userDishes(data), [data]);
   const openRecipe = open ? (open.custom ? mine.find((r) => r.id === open.id) ?? null : open) : null;
@@ -94,7 +94,7 @@ export function RecipesPage({ params }: { params?: URLSearchParams }) {
     const favs = new Set(data.favorites.recipes);
     const recentOrder = new Map(history.map((h, i) => [h.recipe.id, i]));
     const inCollection = collectionIds ? new Map(collectionIds.map((id, i) => [id, i])) : null;
-    const res = (filters.mine ? mine : library).filter((r) => {
+    const res = (filters.mine ? mine : [...mine, ...library]).filter((r) => {
       if (cat && r.category !== cat) return false;
       if (filters.favorites && !favs.has(r.id)) return false;
       if (filters.recent && !recentOrder.has(r.id)) return false;
@@ -122,6 +122,7 @@ export function RecipesPage({ params }: { params?: URLSearchParams }) {
       recomendadas: (a, b) =>
         (filters.recent ? (recentOrder.get(a.id) ?? 0) - (recentOrder.get(b.id) ?? 0) : 0) ||
         (inCollection ? (inCollection.get(a.id) ?? 0) - (inCollection.get(b.id) ?? 0) : 0) ||
+        Number(!!b.custom) - Number(!!a.custom) ||
         Number(favs.has(b.id)) - Number(favs.has(a.id)) ||
         CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category),
       tiempo: (a, b) => a.minutes - b.minutes,
@@ -132,6 +133,7 @@ export function RecipesPage({ params }: { params?: URLSearchParams }) {
     return res.sort(by[sort]);
   }, [library, mine, q, cat, filters, sort, data, history, collectionIds]);
   const browsing = !q.trim() && !cat && countActive(filters) === 0;
+  const canCreateFromQuery = q.trim().length >= 2 && !filters.mine;
 
   const active = countActive(filters);
   const set = <K extends keyof Filters>(k: K, v: Filters[K]) => setFilters((f) => ({ ...f, [k]: v }));
@@ -304,7 +306,12 @@ export function RecipesPage({ params }: { params?: URLSearchParams }) {
         </div>
       )}
 
-      {list.length === 0 ? (
+      {list.length === 0 && canCreateFromQuery ? (
+        <div data-no-results>
+          <p className="mb-2 px-1 text-[14px] text-ink2">Ninguna receta coincide con «{q.trim()}».</p>
+          <CreateFromQuery query={q.trim()} onCreate={() => setEditor({ recipe: null, name: q.trim() })} />
+        </div>
+      ) : list.length === 0 ? (
         <Card>
           <EmptyState icon={filters.favorites ? <Heart size={24} /> : <Search size={24} />} title="Sin resultados">
             {filters.mine && !mine.length
@@ -330,13 +337,14 @@ export function RecipesPage({ params }: { params?: URLSearchParams }) {
                     <span className="min-w-0 flex-1">
                       <span className="flex items-start gap-1.5">
                         <span className="min-w-0 flex-1 text-[15px] font-semibold leading-snug">{recipeTitle(r)}</span>
+                        {r.custom && <Badge tone="accent">Mi plato</Badge>}
                         {fav && <Heart size={14} className="mt-1 shrink-0 fill-danger text-danger" aria-label="Favorita" />}
                       </span>
                       {(r.custom ? r.description : r.title ? r.name : undefined) && <span className="line-clamp-1 text-[13px] leading-snug text-ink3">{r.custom ? r.description : r.name}</span>}
                       <span className="tabular mt-0.5 flex flex-wrap gap-x-2 text-[13px] text-ink2">
                         <span className="font-semibold text-ink">{n0(m.kcal)} kcal</span>
                         <span className="text-protein">P {n0(m.protein)} g</span>
-                        <span className="inline-flex items-center gap-0.5 text-ink3"><Clock size={12} />{r.minutes} min</span>
+                        {r.minutes > 0 && <span className="inline-flex items-center gap-0.5 text-ink3"><Clock size={12} />{r.minutes} min</span>}
                         <span className="text-ink3">{CATEGORY_META[r.category].label}</span>
                       </span>
                       {!fit.ok && <span className="mt-1 block"><Badge tone="danger">{fit.reasons[0]}</Badge></span>}
@@ -347,6 +355,11 @@ export function RecipesPage({ params }: { params?: URLSearchParams }) {
             })}
           </ul>
         </Card>
+      )}
+      {list.length > 0 && canCreateFromQuery && (
+        <div className="mt-3">
+          <CreateFromQuery query={q.trim()} onCreate={() => setEditor({ recipe: null, name: q.trim() })} />
+        </div>
       )}
 
       <Sheet
@@ -412,6 +425,7 @@ export function RecipesPage({ params }: { params?: URLSearchParams }) {
       <DishEditor
         open={!!editor}
         recipe={editor?.recipe}
+        initialName={editor?.name}
         onClose={() => { setEditor(null); if (params?.get('nuevo')) go('recetas'); }}
         onSaved={() => set('mine', true)}
       />
@@ -462,4 +476,17 @@ function defaultSlotFor(slots: import('../types').MealSlot[], r: Recipe | null) 
   const ordered = slotsOrdered(slots);
   const pref = r?.slots.find((x) => ordered.includes(x));
   return pref ?? ordered[0] ?? 'comida';
+}
+
+/** Fila del buscador para crear un plato propio con el nombre buscado (abre el creador completo). */
+function CreateFromQuery({ query, onCreate }: { query: string; onCreate: () => void }) {
+  return (
+    <button type="button" onClick={onCreate} className="press flex w-full items-center gap-3 rounded-[14px] bg-accentSoft/60 px-3 py-2.5 text-left" data-search-create-dish>
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-surface text-accent"><Plus size={20} /></span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[15px] font-semibold text-accent-deep">Crear «{query}» como mi plato</span>
+        <span className="block text-[13px] text-ink2">Con tus ingredientes y cantidades</span>
+      </span>
+    </button>
+  );
 }

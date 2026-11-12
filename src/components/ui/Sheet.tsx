@@ -27,6 +27,10 @@ export function Sheet({ open, onClose, title, subtitle, children, footer, header
   const lastFocus = useRef<HTMLElement | null>(null);
   const [drag, setDrag] = useState(0);
   const startY = useRef<number | null>(null);
+  // onClose suele ser una función nueva en cada render: se guarda en una referencia para que el
+  // efecto de foco NO se repita con cada pulsación (eso quitaba el foco al campo y cerraba el teclado en iPhone)
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return;
@@ -40,7 +44,7 @@ export function Sheet({ open, onClose, title, subtitle, children, footer, header
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
       }
       if (e.key === 'Tab' && panelRef.current) {
         const f = panelRef.current.querySelectorAll<HTMLElement>('button:not([disabled]),[href],input:not([disabled]),select,textarea,[tabindex]:not([tabindex="-1"])');
@@ -64,7 +68,7 @@ export function Sheet({ open, onClose, title, subtitle, children, footer, header
       if (openCount <= 0) document.body.style.overflow = '';
       lastFocus.current?.focus?.({ preventScroll: true });
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

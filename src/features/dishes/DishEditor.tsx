@@ -20,7 +20,14 @@ import { useFoodSearch } from '../log/useFoodSearch';
  * «Crear mi plato»: nombre, ingredientes con cantidad y unidad, raciones y resumen
  * nutricional en tiempo real. Sirve también para editar un plato guardado.
  */
-export function DishEditor({ open, onClose, recipe, onSaved }: { open: boolean; onClose: () => void; recipe?: Recipe | null; onSaved?: (id: string) => void }) {
+export function DishEditor({ open, onClose, recipe, onSaved, initialName }: {
+  open: boolean;
+  onClose: () => void;
+  recipe?: Recipe | null;
+  onSaved?: (id: string) => void;
+  /** nombre propuesto al crear un plato nuevo (p. ej. lo escrito en el buscador) */
+  initialName?: string;
+}) {
   const data = useData();
   const { mutate } = useStore();
   const { toast, confirm } = useFeedback();
@@ -36,7 +43,7 @@ export function DishEditor({ open, onClose, recipe, onSaved }: { open: boolean; 
 
   useEffect(() => {
     if (!open) return;
-    const d = recipe ? draftFromRecipe(recipe) : emptyDraft();
+    const d = recipe ? draftFromRecipe(recipe) : { ...emptyDraft(), name: initialName?.slice(0, 80) ?? '' };
     setDraft(d);
     setQtyText(d.items.map((i) => fmt(i.quantity)));
     setInitial(JSON.stringify(d));
@@ -198,7 +205,6 @@ export function DishEditor({ open, onClose, recipe, onSaved }: { open: boolean; 
                             enterKeyHint="done"
                             value={qtyText[idx] ?? ''}
                             onChange={(e) => setQty(idx, e.target.value)}
-                            onFocus={(e) => e.target.select()}
                             className="tabular w-full bg-transparent text-[17px] font-semibold focus:outline-none"
                             data-qty
                           />
