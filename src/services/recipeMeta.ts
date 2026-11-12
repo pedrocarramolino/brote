@@ -1,4 +1,4 @@
-import type { AppData, DietType, Difficulty, MainIngredient, Macros, Recipe, RecipeCategory, RecipeTag } from '../types';
+import type { AppData, Cuisine, DietType, Difficulty, MainIngredient, Macros, Recipe, RecipeCategory, RecipeTag } from '../types';
 import { getFood } from './catalog';
 import { foodAllowedByDiet, ingredientsAllergens, recipeNutrition } from './nutrition';
 
@@ -79,4 +79,38 @@ export function recipeMacros(data: Pick<AppData, 'customFoods'>, r: Recipe): Mac
   let m = macroCache.get(r);
   if (!m) macroCache.set(r, (m = recipeNutrition(data, r).macros));
   return m;
+}
+
+/** Nombre comercial de la receta (o el descriptivo si es una receta propia sin título). */
+export const recipeTitle = (r: Pick<Recipe, 'title' | 'name'>) => r.title ?? r.name;
+
+export const CUISINE_LABEL: Record<Cuisine, string> = {
+  espanola: 'Española', mediterranea: 'Mediterránea', italiana: 'Italiana', mexicana: 'Mexicana', asiatica: 'Asiática', americana: 'Americana', internacional: 'Del mundo',
+};
+export const CUISINE_ORDER: Cuisine[] = ['espanola', 'mediterranea', 'italiana', 'mexicana', 'asiatica', 'americana', 'internacional'];
+
+export interface FiberInfo {
+  grams: number;
+  /** false si algún ingrediente no tiene dato de fibra (el total es parcial) */
+  complete: boolean;
+}
+
+/** Fibra estimada por ración (multiplicada por `portion`). */
+export function ingredientsFiber(data: Pick<AppData, 'customFoods'>, ingredients: { foodId: string; amount: number }[], portion = 1): FiberInfo {
+  let grams = 0;
+  let complete = true;
+  for (const i of ingredients) {
+    const f = getFood(data, i.foodId);
+    if (!f || f.fiber === undefined) { complete = false; continue; }
+    grams += (f.fiber * i.amount * portion) / 100;
+  }
+  return { grams, complete };
+}
+
+/** Texto de búsqueda de una receta: nombre comercial, descripción e ingredientes. */
+export function recipeMatches(data: Pick<AppData, 'customFoods'>, r: Recipe, normalizedQuery: string, norm: (s: string) => string): boolean {
+  if (!normalizedQuery) return true;
+  const words = normalizedQuery.split(/\s+/).filter(Boolean);
+  const hay = `${norm(r.title ?? '')} ${norm(r.name)} ${r.ingredients.map((i) => norm(getFood(data, i.foodId)?.name ?? '')).join(' ')}`;
+  return words.every((w) => hay.includes(w));
 }

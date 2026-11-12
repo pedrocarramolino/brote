@@ -64,6 +64,8 @@ export interface Food {
   name: string;
   unit: 'g' | 'ml';
   per100: Macros;
+  /** fibra por 100 g/ml (estimada); undefined = sin dato */
+  fiber?: number;
   category: ShopCategory;
   allergens?: Allergen[];
   /** origen de los valores nutricionales */
@@ -87,11 +89,17 @@ export type Difficulty = 'facil' | 'media' | 'elaborada';
 export type MainIngredient =
   | 'pollo' | 'pavo' | 'ternera' | 'cerdo' | 'pescado_blanco' | 'pescado_azul' | 'atun' | 'marisco'
   | 'huevo' | 'lacteo' | 'legumbre' | 'proteina_vegetal' | 'cereal' | 'verdura' | 'fruta';
+export type Cuisine = 'espanola' | 'mediterranea' | 'italiana' | 'mexicana' | 'asiatica' | 'americana' | 'internacional';
 export type RecipeTag = 'rapida' | 'batch' | 'sin_coccion' | 'alta_proteina' | 'ligera' | 'cuchara' | 'horno' | 'dulce' | 'tradicional' | 'internacional';
 
 export interface Recipe {
   id: string;
+  /** nombre comercial, corto y con gancho («Pollo Power Bowl») */
+  title?: string;
+  /** nombre descriptivo: qué lleva el plato («Bol de pollo a la plancha con arroz…») */
   name: string;
+  /** cocina de referencia */
+  cuisine?: Cuisine;
   /** franjas del día en las que el planificador puede usarla */
   slots: MealSlot[];
   /** categoría principal en la biblioteca */
@@ -130,7 +138,24 @@ export interface PlannedMeal {
    * valor = alimento equivalente y cantidad por ración. La receta del catálogo no se modifica.
    */
   swaps?: Record<string, { foodId: string; amount: number }>;
+  /**
+   * El usuario ha aceptado o elegido este plato: al volver a generar la propuesta
+   * de la semana no se cambia automáticamente.
+   */
+  accepted?: boolean;
   demo?: boolean;
+}
+
+/** Sustitución de un plato del plan (equivale a la tabla meal_replacements). */
+export interface MealReplacement {
+  id: string;
+  date: ISODate;
+  slot: MealSlot;
+  fromRecipeId: string | null;
+  toRecipeId: string | null;
+  /** 'manual' = elegido de la lista, 'sorpresa' = Sorpréndeme, 'dia' = cambio de día, 'regenerar' = nueva propuesta */
+  source: 'manual' | 'sorpresa' | 'dia' | 'regenerar';
+  at: string;
 }
 
 export interface FoodLogEntry {
@@ -244,6 +269,8 @@ export interface AppData {
   steps: StepsEntry[];
   shopping: Record<string, ShoppingOverrides>; // clave: lunes de la semana
   favorites: { recipes: string[]; foods: string[] };
+  /** Historial de sustituciones de platos (las más recientes al final, máx. 300). */
+  replacements?: MealReplacement[];
   chat: ChatMessage[];
   /** Revisión semanal: lunes de la última semana revisada y aplazamiento temporal. */
   weeklyReview?: WeeklyReviewState;

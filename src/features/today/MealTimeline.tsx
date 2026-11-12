@@ -8,6 +8,9 @@ import { MoreMenu } from '../../components/ui/Menu';
 import { n0 } from '../../lib/format';
 import { MacroInline, RecipeCover } from '../meals/RecipeBits';
 import { useMealActions } from '../meals/useMealActions';
+import { recipeTitle } from '../../services/recipeMeta';
+
+const titleOf = (r: { title?: string; name: string } | undefined) => (r ? recipeTitle(r) : undefined);
 
 interface Props {
   date: ISODate;
@@ -21,7 +24,7 @@ interface Props {
 export function StatusNode({ meal, onToggle, size = 30 }: { meal: PlannedMeal; onToggle: () => void; size?: number }) {
   const done = meal.status === 'hecha';
   const skipped = meal.status === 'omitida';
-  const name = getRecipe({ customRecipes: [] }, meal.recipeId)?.name ?? meal.customName ?? SLOT_META[meal.slot].label;
+  const name = titleOf(getRecipe({ customRecipes: [] }, meal.recipeId)) ?? meal.customName ?? SLOT_META[meal.slot].label;
   return (
     <button
       type="button"
@@ -82,8 +85,9 @@ export function MealTimeline({ date, meals, onOpenRecipe, onSwap, onAddFood, onE
                       <RecipeCover recipe={recipe} size={52} />
                       <span className="min-w-0 flex-1">
                         <span className={cx('block text-[16px] font-semibold leading-snug', meal.status === 'omitida' && 'line-through')}>
-                          {recipe?.name ?? meal.customName ?? 'Plato sin receta'}
+                          {titleOf(recipe) ?? meal.customName ?? 'Plato sin receta'}
                         </span>
+                        {recipe?.title && <span className="block truncate text-[13px] leading-snug text-ink3">{recipe.name}</span>}
                         {n ? (
                           <MacroInline m={n} className="mt-0.5" />
                         ) : (

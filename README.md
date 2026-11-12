@@ -20,7 +20,8 @@ Al abrirla por primera vez puedes **crear tu perfil** (cuestionario de 7 pasos, 
 | Sección | Funcionalidad |
 | --- | --- |
 | **Hoy** | Saludo, selector de día, anillo de calorías y barras de macros que se recalculan al marcar/registrar, línea temporal de comidas con horarios, hábitos (agua, pasos, actividad, comidas, personalizados), resumen de actividad y peso |
-| **Plan** | Semana navegable, selector de días con progreso, resumen nutricional del día, detalle de receta (ingredientes escalados por ración, pasos, alérgenos, equivalencias de ingredientes), «Cambiar plato» con confirmación, catálogo con favoritas y filtros |
+| **Plan** | Semana navegable, propuesta semanal con **Aceptar menú**, **Otra propuesta** (solo cambia lo no aceptado) y **Cambiar día**, avisos cuando el catálogo no permite cumplir todas las reglas, detalle de receta (ingredientes escalados, pasos, alérgenos, fibra, equivalencias), «Cambiar plato» con Sorpréndeme y deshacer |
+| **Recetas** | Biblioteca de 527 recetas con nombre comercial y descripción, buscador por nombre/ingrediente, filtros (categoría, cocina, tiempo, calorías, proteína, ingrediente principal, dificultad, dieta), favoritas, recientes, colecciones y «Sorpréndeme» con «Añadir al menú» |
 | **Registro** | Búsqueda local, favoritos, recientes, cantidades con raciones típicas, edición y borrado (con deshacer), alimentos personalizados con validación, Open Food Facts opcional, registro por foto/texto (modo demo honesto si no hay IA) |
 | **Compra** | Generada desde el menú, agrupada por secciones, suma cantidades, marca de comprado, edición de cantidades, productos manuales, modo tienda, copiar lista; los cambios manuales se conservan al modificar el menú |
 | **Progreso** | Periodos 7 d / 1 m / 3 m / 6 m, peso, medidas, cumplimiento del plan, consistencia de hábitos, pasos y minutos de actividad; estados vacíos y aviso de que el peso no equivale a grasa |
@@ -33,8 +34,11 @@ Al abrirla por primera vez puedes **crear tu perfil** (cuestionario de 7 pasos, 
 ```
 src/
   types/            Modelo de datos (mapea 1:1 con supabase/migrations/0001_schema.sql)
-  data/             Base de alimentos (valores de referencia BEDCA/USDA), recetas, rutinas, demo
-  services/         Lógica sin UI: nutrición, planificador, sustituciones, compra, hábitos,
+  data/             Base de alimentos (valores de referencia, con fibra), biblioteca de recetas, rutinas, demo
+    recipeLibrary/  Catálogo independiente de la interfaz: build.ts (filas → Recipe), titles.ts
+                    (nombres comerciales de v1/v2), v3/ (recetas nuevas por categoría)
+  services/         Lógica sin UI: nutrición, planificador (rotación 4 semanas), biblioteca
+                    (colecciones e historial), sustituciones, compra, hábitos,
                     equivalencias, base de alimentos (local + Open Food Facts), almacenamiento,
                     ai/ (contexto, proveedor demo, proveedor remoto)
   store/            Estado global + persistencia (DataRepository)
@@ -42,12 +46,28 @@ src/
   features/         Piezas por dominio (comidas, registro, hoy, progreso, actividad)
   pages/            Las 7 pantallas + bienvenida
 api/assistant.ts    Backend seguro del asistente (Vercel Edge Function)
-supabase/           Esquema SQL con Row Level Security, preparado para migrar
+supabase/           Esquema SQL con Row Level Security, preparado para migrar (0002: biblioteca)
+scripts/check-library.ts  Validación de la biblioteca y simulación del planificador
 ```
 
 - **Nutrición trazable**: las recetas no llevan calorías escritas a mano; se calculan desde ingredientes y cantidades. Los platos libres sin datos se marcan y no se suman.
 - **Persistencia**: `LocalRepository` (localStorage, con respaldo en memoria si está bloqueado). Para migrar a Supabase basta implementar `DataRepository` (`src/services/storage.ts`).
 - **Sustituciones**: filtro duro por alergias, tipo de dieta y alimentos rechazados; orden por parecido de calorías y proteína, tiempo disponible, ingredientes ya presentes en la semana, favoritas y objetivo. El menú solo cambia al confirmar, con opción de deshacer.
+
+## Biblioteca gastronómica
+
+Arquitectura: **biblioteca → recetas → planificación semanal → registro diario**. Las recetas viven en `src/data/recipeLibrary` como datos (no dentro de componentes) y se identifican por un `id` estable que usan menús, favoritos, historial y lista de la compra. Para añadir recetas basta con añadir filas a `v3/*.ts`; la interfaz no cambia.
+
+- **527 recetas**: 105 desayunos, 143 comidas, 105 cenas, 61 meriendas, 51 media mañana, 36 snacks y 26 postres. Cocina española, mediterránea, italiana, mexicana, asiática, americana y del mundo; pollo, pavo, ternera, cerdo, pescado blanco y azul, atún, marisco, huevo, lácteos, legumbres y proteína vegetal.
+- **Cada receta**: id, nombre comercial (`title`, p. ej. «Pollo Power Bowl»), nombre descriptivo (`name`), categoría, franjas, cocina, ingrediente principal, raciones, tiempo, dificultad, ingredientes con cantidad y unidad **por ración**, pasos, etiquetas. Alérgenos, compatibilidad con dietas, calorías, macros y fibra se **calculan** desde los ingredientes (no se escriben a mano) y se muestran como **valores estimados**; solo los productos con datos de envase (Open Food Facts) cuentan como verificados.
+- **Fotografías**: no hay fotos reales verificadas de cada plato. Se usa una portada ilustrada propia (icono del tipo de plato + colores de sus ingredientes), marcada como «Ilustración · sin foto real» en el detalle. El modelo admite `imageUrl` para añadir fotos reales más adelante.
+- `npm run check:library` valida ids, nombres comerciales únicos, alimentos existentes, pasos, rangos de calorías por categoría y coherencia kcal/macros, y simula 8 semanas de menús con varios perfiles (repeticiones en la semana, rotación de 4 semanas, proteína en comidas consecutivas, sustituciones y lista de la compra).
+
+### Planificador
+
+Para cada hueco puntúa las recetas compatibles (alergias, dieta, «no me gusta» y tiempo de cocina son filtros duros) y elige la mejor: sin repetir receta en la semana, evitando las de las 4 semanas anteriores (recupera las de hace 5–10 semanas), sin repetir ingrediente principal en comidas principales consecutivas, alternando carne, pescado (~3), legumbre (~2) y huevo, limitando carne roja, variando desayunos y meriendas, repartiendo ingredientes y evitando días con la misma combinación. Ajusta la ración a la energía objetivo. Si el catálogo compatible es pequeño, prioriza las restricciones y lo indica en el Plan.
+
+Datos del usuario: favoritas (`favorites.recipes`), historial derivado del plan (`services/library.ts`), platos aceptados (`PlannedMeal.accepted`) y sustituciones (`AppData.replacements`). Todo se guarda con el resto de datos y sobrevive a recargas.
 
 ## Despliegue y asistente con IA
 
@@ -69,4 +89,5 @@ Los datos se guardan solo en el navegador. No hay analítica ni envío a tercero
 - Cuentas y sincronización con Supabase (esquema listo, sin aplicar).
 - Precios por producto para usar el presupuesto en las recomendaciones.
 - Recetas propias creadas por el usuario (modelo y tabla preparados; falta el editor).
-- Fotografías reales de recetas (`imageUrl` en el modelo; ahora se usan portadas ilustradas).
+- Fotografías reales de recetas (`imageUrl` en el modelo; ahora se usan portadas ilustradas identificadas como tales).
+- Más recetas sin gluten para perfiles vegetarianos/veganos: con esa combinación hay ~15 comidas y cenas compatibles y el menú se repite antes de 4 semanas (la app lo avisa).

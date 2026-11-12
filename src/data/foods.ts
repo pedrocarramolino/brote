@@ -217,13 +217,80 @@ const rows: Row[] = [
   ['crema_almendras', 'Crema de almendras', 'g', 614, 21, 19, 56, 'otros', ['frutos_secos'], ['1 cucharada', 15]],
   ['canela', 'Canela molida', 'g', 247, 4, 81, 1.2, 'otros', [], ['1 pizca', 1]],
   ['levadura_quimica', 'Levadura química', 'g', 53, 0, 28, 0, 'otros', [], ['1 sobre', 8]],
+  // ---- Ampliación de la base (v3): más pescados, mariscos, hierbas y despensa ----
+  ['rape', 'Rape', 'g', 76, 16, 0, 1.5, 'proteinas', ['pescado'], ['1 ración', 150], ['animal', 'pescado']],
+  ['boquerones', 'Boquerones frescos', 'g', 131, 20, 0, 4.8, 'proteinas', ['pescado'], ['1 ración', 150], ['animal', 'pescado']],
+  ['trucha', 'Trucha', 'g', 141, 20, 0, 6.6, 'proteinas', ['pescado'], ['1 filete', 150], ['animal', 'pescado']],
+  ['emperador', 'Pez espada (emperador)', 'g', 144, 20, 0, 6.7, 'proteinas', ['pescado'], ['1 rodaja', 150], ['animal', 'pescado']],
+  ['pulpo', 'Pulpo cocido', 'g', 140, 25, 3.7, 1.8, 'proteinas', ['marisco'], ['1 ración', 120], ['animal', 'pescado']],
+  ['almejas', 'Almejas (carne)', 'g', 86, 15, 3.6, 1, 'proteinas', ['marisco'], ['1 ración', 100], ['animal', 'pescado']],
+  ['tofu_sedoso', 'Tofu sedoso', 'g', 55, 4.8, 2.9, 2.7, 'proteinas', ['soja'], ['1/2 bloque', 150]],
+  ['habas', 'Habas baby (congeladas)', 'g', 88, 7.9, 17.6, 0.6, 'verduras', [], ['1 ración', 120]],
+  ['tirabeques', 'Tirabeques', 'g', 42, 2.8, 7.6, 0.2, 'verduras', [], ['1 puñado', 80]],
+  ['brotes_soja', 'Brotes de soja (judía mungo)', 'g', 30, 3, 6, 0.2, 'verduras', [], ['1 puñado', 60]],
+  ['pak_choi', 'Pak choi', 'g', 13, 1.5, 2.2, 0.2, 'verduras', [], ['1 unidad', 100]],
+  ['endivias', 'Endivias', 'g', 17, 1.3, 4, 0.2, 'verduras', [], ['1 unidad', 80]],
+  ['cebolleta', 'Cebolleta', 'g', 32, 1.8, 7.3, 0.2, 'verduras', [], ['1 unidad', 50]],
+  ['albahaca', 'Albahaca fresca', 'g', 23, 3.2, 2.7, 0.6, 'verduras', [], ['1 puñado', 5]],
+  ['cilantro', 'Cilantro fresco', 'g', 23, 2.1, 3.7, 0.5, 'verduras', [], ['1 cucharada picada', 4]],
+  ['lima', 'Lima', 'g', 30, 0.7, 10.5, 0.2, 'verduras', [], ['1 unidad', 60]],
+  ['albaricoque', 'Albaricoque', 'g', 48, 1.4, 11, 0.4, 'verduras', [], ['2 unidades', 80]],
+  ['orejones', 'Orejones de albaricoque', 'g', 241, 3.4, 63, 0.5, 'otros', ['sulfitos'], ['4 unidades', 30]],
+  ['arroz_basmati', 'Arroz basmati (crudo)', 'g', 356, 8, 78, 0.6, 'cereales', [], ['1 ración', 70]],
+  ['gnocchi', 'Ñoquis de patata', 'g', 133, 3.5, 28, 0.6, 'cereales', ['gluten'], ['1 ración', 200]],
+  ['masa_pizza', 'Masa de pizza', 'g', 260, 7.5, 50, 3, 'cereales', ['gluten'], ['1 base', 200]],
+  ['pan_hamburguesa', 'Pan de hamburguesa integral', 'g', 260, 10, 45, 4, 'cereales', ['gluten', 'sesamo'], ['1 unidad', 70]],
+  ['harina_maiz', 'Harina de maíz precocida', 'g', 360, 7, 77, 1.5, 'cereales', [], ['1 taza', 120]],
+  ['harina_garbanzo', 'Harina de garbanzo', 'g', 387, 22, 58, 6.7, 'cereales', [], ['1 cucharada', 10]],
+  ['pan_rallado', 'Pan rallado', 'g', 395, 13, 72, 5.3, 'cereales', ['gluten'], ['1 cucharada', 10]],
+  ['maicena', 'Maicena (almidón de maíz)', 'g', 381, 0.3, 91, 0.1, 'cereales', [], ['1 cucharada', 10]],
+  ['mantequilla', 'Mantequilla', 'g', 717, 0.9, 0.1, 81, 'lacteos', ['lactosa'], ['1 cucharadita', 5], ['animal', 'lacteo']],
+  ['nata_ligera', 'Nata para cocinar 18 %', 'ml', 190, 2.5, 4, 18, 'lacteos', ['lactosa'], ['1 brick pequeño', 200], ['animal', 'lacteo']],
+  ['queso_untar', 'Queso crema ligero', 'g', 150, 7.5, 4.5, 11, 'lacteos', ['lactosa'], ['1 cucharada', 20], ['animal', 'lacteo']],
+  ['miso', 'Pasta de miso', 'g', 199, 12, 26, 6, 'conservas', ['soja'], ['1 cucharada', 15]],
+  ['sirope_arce', 'Sirope de arce', 'g', 260, 0, 67, 0.1, 'conservas', [], ['1 cucharada', 15]],
+  ['cacahuetes', 'Cacahuetes tostados sin sal', 'g', 567, 25.8, 16, 49, 'otros', ['cacahuete'], ['1 puñado', 20]],
+  ['pipas_calabaza', 'Pipas de calabaza peladas', 'g', 559, 30, 11, 49, 'otros', [], ['1 cucharada', 10]],
 ];
+
+
+/**
+ * Fibra alimentaria por 100 g (o 100 ml), valores medios aproximados del orden de las tablas
+ * públicas (USDA FoodData Central / BEDCA). Se muestran siempre como estimación.
+ */
+const FIBER: Record<string, number> = {
+  tomate: 1.2, lechuga: 1.3, espinacas: 2.2, rucula: 1.6, brocoli: 2.6, calabacin: 1, berenjena: 3, cebolla: 1.7, ajo: 2.1,
+  pimiento: 2.1, zanahoria: 2.8, pepino: 0.5, champinones: 1, judias_verdes: 2.7, patata: 2.2, boniato: 3, aguacate: 6.7,
+  platano: 2.6, manzana: 2.4, naranja: 2.4, kiwi: 3, fresas: 2, frutos_rojos: 2.4, limon: 2.8,
+  pollo: 0, pavo: 0, pavo_fiambre: 0, ternera: 0, salmon: 0, merluza: 0, langostinos: 0, huevo: 0, tofu: 0.3,
+  yogur: 0, yogur_griego: 0, queso_batido: 0, queso_fresco: 0, mozzarella: 0, parmesano: 0, leche: 0, bebida_soja: 0.6, bebida_avena: 0.8,
+  avena: 10.1, pan_integral: 6, arroz_integral: 3.5, arroz: 1.3, pasta_integral: 8, quinoa: 7, cuscus: 5, tortilla_trigo: 5, tortitas_arroz: 4,
+  garbanzos: 7.6, lentejas: 7.9, alubias: 6.4, atun: 0, tomate_triturado: 1.5, hummus: 6, aceite: 0, caldo: 0, salsa_soja: 0.8,
+  miel: 0.2, crema_cacahuete: 6, nueces: 6.7, almendras: 12.5, chia: 34.4, cafe: 0, chocolate: 11,
+  coliflor: 2, puerro: 1.8, apio: 1.6, calabaza: 0.5, esparragos: 2.1, guisantes: 5.5, alcachofa: 5.4, col_lombarda: 2.1, repollo: 2.5,
+  kale: 4.1, acelgas: 1.6, remolacha: 2, cebolla_morada: 1.7, setas: 2.3, pimiento_verde: 1.7, tomate_cherry: 1.2, canonigos: 1.5,
+  rabanos: 1.6, jengibre: 2, perejil: 3.3, pera: 3.1, melocoton: 1.5, mango: 1.6, pina: 1.4, uvas: 0.9, sandia: 0.4, melon: 0.9,
+  granada: 4, higos: 2.9, mandarina: 1.8, ciruela: 1.4, cerezas: 2.1, frambuesas: 6.5, caqui: 3.6, datiles: 8, pasas: 3.7,
+  pollo_contramuslo: 0, ternera_picada: 0, lomo_cerdo: 0, solomillo_cerdo: 0, jamon_serrano: 0, jamon_cocido: 0,
+  bacalao: 0, lubina: 0, dorada: 0, sardinas: 0, caballa: 0, atun_fresco: 0, salmon_ahumado: 0, gambas: 0, mejillones: 0, calamar: 0, sepia: 0,
+  claras: 0, tempeh: 5, soja_texturizada: 17, edamame: 5.2, seitan: 0.6,
+  requeson: 0, skyr: 0, kefir: 0, queso_curado: 0, queso_cabra: 0, feta: 0, queso_rallado: 0, yogur_soja: 0.5, bebida_almendra: 0.4,
+  pasta: 3, fideos_arroz: 1.6, bulgur: 12.5, pan: 2.7, pan_centeno: 6, pan_pita: 2.2, tortilla_maiz: 6, harina: 2.7, harina_integral: 10.7,
+  muesli: 7.5, granola: 6, copos_maiz: 3, maiz: 2.4, aceitunas: 3.3, piquillos: 1.5, mostaza: 3.3, vinagre: 0, tahini: 9.3,
+  leche_coco: 2.2, caldo_pollo: 0, caldo_pescado: 0, tomate_frito: 1.5, cacao: 33, coco_rallado: 16, pipas_girasol: 8.6, sesamo: 11.8,
+  lino: 27, pistachos: 10, avellanas: 9.7, anacardos: 3.3, crema_almendras: 10, canela: 53, levadura_quimica: 0,
+  rape: 0, boquerones: 0, trucha: 0, emperador: 0, pulpo: 0, almejas: 0, tofu_sedoso: 0.1, habas: 5.4, tirabeques: 2.6, brotes_soja: 1.8,
+  pak_choi: 1, endivias: 3.1, cebolleta: 2.6, albahaca: 1.6, cilantro: 2.8, lima: 2.8, albaricoque: 2, orejones: 7.3, arroz_basmati: 1.3,
+  gnocchi: 1.5, masa_pizza: 2, pan_hamburguesa: 5, harina_maiz: 7, harina_garbanzo: 10.8, pan_rallado: 4.5, maicena: 0.9,
+  mantequilla: 0, nata_ligera: 0, queso_untar: 0, miso: 5.4, sirope_arce: 0, cacahuetes: 8.5, pipas_calabaza: 6,
+};
 
 export const BASE_FOODS: Food[] = rows.map(([id, name, unit, kcal, protein, carbs, fat, category, allergens, portion, tags]) => ({
   id,
   name,
   unit,
   per100: { kcal, protein, carbs, fat },
+  fiber: FIBER[id],
   category,
   allergens: allergens ?? [],
   source: 'referencia',
@@ -233,13 +300,13 @@ export const BASE_FOODS: Food[] = rows.map(([id, name, unit, kcal, protein, carb
 
 /** Grupos de intercambio para calcular equivalencias por el macronutriente dominante */
 export const EXCHANGE_GROUPS: { id: string; label: string; basis: 'carbs' | 'protein' | 'fat' | 'kcal'; foods: string[] }[] = [
-  { id: 'hidratos', label: 'Hidratos', basis: 'carbs', foods: ['arroz', 'arroz_integral', 'pasta', 'pasta_integral', 'fideos_arroz', 'quinoa', 'cuscus', 'bulgur', 'patata', 'boniato', 'pan_integral', 'pan', 'pan_centeno', 'pan_pita', 'avena', 'tortitas_arroz', 'tortilla_trigo', 'tortilla_maiz', 'muesli', 'copos_maiz'] },
-  { id: 'proteinas', label: 'Proteína', basis: 'protein', foods: ['pollo', 'pollo_contramuslo', 'pavo', 'ternera', 'ternera_picada', 'lomo_cerdo', 'solomillo_cerdo', 'salmon', 'merluza', 'bacalao', 'lubina', 'dorada', 'sardinas', 'caballa', 'atun', 'atun_fresco', 'langostinos', 'gambas', 'calamar', 'sepia', 'huevo', 'tofu', 'tempeh', 'seitan', 'pavo_fiambre', 'jamon_cocido'] },
-  { id: 'legumbres', label: 'Legumbres', basis: 'protein', foods: ['garbanzos', 'lentejas', 'alubias', 'tofu', 'edamame', 'soja_texturizada'] },
+  { id: 'hidratos', label: 'Hidratos', basis: 'carbs', foods: ['arroz', 'arroz_integral', 'arroz_basmati', 'gnocchi', 'pasta', 'pasta_integral', 'fideos_arroz', 'quinoa', 'cuscus', 'bulgur', 'patata', 'boniato', 'pan_integral', 'pan', 'pan_centeno', 'pan_pita', 'avena', 'tortitas_arroz', 'tortilla_trigo', 'tortilla_maiz', 'muesli', 'copos_maiz'] },
+  { id: 'proteinas', label: 'Proteína', basis: 'protein', foods: ['pollo', 'pollo_contramuslo', 'pavo', 'ternera', 'ternera_picada', 'lomo_cerdo', 'solomillo_cerdo', 'salmon', 'merluza', 'bacalao', 'lubina', 'dorada', 'sardinas', 'caballa', 'atun', 'atun_fresco', 'langostinos', 'gambas', 'calamar', 'sepia', 'rape', 'trucha', 'emperador', 'boquerones', 'pulpo', 'huevo', 'tofu', 'tempeh', 'seitan', 'pavo_fiambre', 'jamon_cocido'] },
+  { id: 'legumbres', label: 'Legumbres', basis: 'protein', foods: ['garbanzos', 'lentejas', 'alubias', 'habas', 'tofu', 'edamame', 'soja_texturizada'] },
   { id: 'lacteos', label: 'Lácteos', basis: 'protein', foods: ['yogur', 'yogur_griego', 'skyr', 'kefir', 'queso_batido', 'requeson', 'leche', 'bebida_soja', 'yogur_soja'] },
-  { id: 'grasas', label: 'Grasas', basis: 'fat', foods: ['aceite', 'aguacate', 'nueces', 'almendras', 'avellanas', 'anacardos', 'pistachos', 'crema_cacahuete', 'crema_almendras', 'tahini', 'aceitunas'] },
-  { id: 'fruta', label: 'Fruta', basis: 'kcal', foods: ['platano', 'manzana', 'pera', 'naranja', 'mandarina', 'kiwi', 'fresas', 'frutos_rojos', 'frambuesas', 'melocoton', 'mango', 'pina', 'uvas', 'melon', 'sandia', 'cerezas', 'ciruela', 'caqui', 'higos', 'granada'] },
-  { id: 'verdura', label: 'Verdura', basis: 'kcal', foods: ['brocoli', 'coliflor', 'calabacin', 'berenjena', 'judias_verdes', 'espinacas', 'acelgas', 'champinones', 'setas', 'pimiento', 'pimiento_verde', 'esparragos', 'calabaza', 'alcachofa', 'puerro', 'repollo'] },
+  { id: 'grasas', label: 'Grasas', basis: 'fat', foods: ['aceite', 'aguacate', 'nueces', 'almendras', 'avellanas', 'anacardos', 'pistachos', 'cacahuetes', 'crema_cacahuete', 'crema_almendras', 'tahini', 'aceitunas'] },
+  { id: 'fruta', label: 'Fruta', basis: 'kcal', foods: ['platano', 'manzana', 'pera', 'naranja', 'mandarina', 'kiwi', 'fresas', 'frutos_rojos', 'frambuesas', 'melocoton', 'mango', 'pina', 'uvas', 'melon', 'sandia', 'cerezas', 'ciruela', 'caqui', 'higos', 'granada', 'albaricoque'] },
+  { id: 'verdura', label: 'Verdura', basis: 'kcal', foods: ['brocoli', 'coliflor', 'calabacin', 'berenjena', 'judias_verdes', 'espinacas', 'acelgas', 'champinones', 'setas', 'pimiento', 'pimiento_verde', 'esparragos', 'calabaza', 'alcachofa', 'puerro', 'repollo', 'tirabeques', 'pak_choi'] },
 ];
 
 export const ALLERGEN_LABELS: Record<Allergen, string> = {

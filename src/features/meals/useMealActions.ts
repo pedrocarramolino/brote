@@ -5,6 +5,8 @@ import { useFeedback } from '../../components/ui/Feedback';
 import { startOfWeek } from '../../lib/dates';
 import { uid } from '../../lib/format';
 import { getRecipe } from '../../services/catalog';
+import { logReplacement } from '../../services/planner';
+import { recipeTitle } from '../../services/recipeMeta';
 
 function findMeal(d: AppData, id: string): PlannedMeal | undefined {
   for (const w of Object.values(d.plan)) {
@@ -50,13 +52,15 @@ export function useMealActions() {
 
   /** Sustituye el plato SOLO al confirmar. Permite deshacer. */
   const swap = useCallback(
-    (meal: PlannedMeal, next: { recipeId: string } | { customName: string }) => {
-      const prev = { recipeId: meal.recipeId, customName: meal.customName };
+    (meal: PlannedMeal, next: { recipeId: string } | { customName: string }, source: 'manual' | 'sorpresa' = 'manual') => {
+      const prev = { recipeId: meal.recipeId, customName: meal.customName, accepted: meal.accepted };
       const prevMealSwaps = meal.swaps ? structuredClone(meal.swaps) : undefined;
       mutate((d) => {
         const m = findMeal(d, meal.id);
         if (!m) return;
         delete m.swaps; // las sustituciones de ingredientes eran del plato anterior
+        m.accepted = true; // elegido por el usuario: no se cambia al regenerar la propuesta
+        logReplacement(d, { date: m.date, slot: m.slot, fromRecipeId: prev.recipeId, toRecipeId: 'recipeId' in next ? next.recipeId : null, source });
         if ('recipeId' in next) {
           m.recipeId = next.recipeId;
           delete m.customName;
@@ -65,7 +69,8 @@ export function useMealActions() {
           m.customName = next.customName;
         }
       });
-      const name = 'recipeId' in next ? getRecipe({ customRecipes: [] }, next.recipeId)?.name ?? 'el nuevo plato' : next.customName;
+      const nr = 'recipeId' in next ? getRecipe({ customRecipes: [] }, next.recipeId) : undefined;
+      const name = 'recipeId' in next ? (nr ? recipeTitle(nr) : 'el nuevo plato') : next.customName;
       toast(`Cambiado por ${name}`, {
         action: {
           label: 'Deshacer',
@@ -74,6 +79,9 @@ export function useMealActions() {
               const m = findMeal(d, meal.id);
               if (!m) return;
               m.recipeId = prev.recipeId;
+              m.accepted = prev.accepted;
+              if (!m.accepted) delete m.accepted;
+              d.replacements?.pop();
               if (prevMealSwaps) m.swaps = prevMealSwaps;
               if (prev.customName) m.customName = prev.customName;
               else delete m.customName;
@@ -151,7 +159,7 @@ export function useMealActions() {
       mutate((d) => {
         const key = startOfWeek(date);
         d.plan[key] ??= [];
-        d.plan[key].push({ id: uid('pm'), date, slot, recipeId, portion: 1, status: 'pendiente' });
+        d.plan[key].push({ id: uid('pm'), date, slot, recipeId, portion: 1, status: 'pendiente', accepted: true });
       });
     },
     [mutate],

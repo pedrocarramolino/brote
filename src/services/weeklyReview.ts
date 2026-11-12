@@ -1,3 +1,4 @@
+import { recipeTitle } from './recipeMeta';
 import type { AppData, ISODate, MealSlot, PlannedMeal, UserProfile } from '../types';
 import { addDays, startOfWeek, weekDates } from '../lib/dates';
 import { uid } from '../lib/format';
@@ -118,13 +119,13 @@ export function reviewMenu(data: AppData, draft: UserProfile, today: ISODate): M
         }
         if (ok) options.push({ kind: 'ingredients', swaps, label: parts.join(', ') });
         // 2) cambio de plato
-        for (const alt of findAlternatives(d, meal, 3).alternatives) options.push({ kind: 'recipe', recipeId: alt.recipe.id, label: alt.recipe.name });
+        for (const alt of findAlternatives(d, meal, 3).alternatives) options.push({ kind: 'recipe', recipeId: alt.recipe.id, label: recipeTitle(alt.recipe) });
         options.push({ kind: 'remove' }, { kind: 'keep' });
       }
     }
     if (!options.length) {
       options.push({ kind: 'keep' });
-      if (recipe && !recipe.custom) for (const alt of findAlternatives(d, meal, 3).alternatives) options.push({ kind: 'recipe', recipeId: alt.recipe.id, label: alt.recipe.name });
+      if (recipe && !recipe.custom) for (const alt of findAlternatives(d, meal, 3).alternatives) options.push({ kind: 'recipe', recipeId: alt.recipe.id, label: recipeTitle(alt.recipe) });
       options.push({ kind: 'remove' });
     }
     return { meal, conflicts, options };

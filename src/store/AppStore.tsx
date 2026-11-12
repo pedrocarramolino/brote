@@ -26,6 +26,7 @@ function migrate(d: AppData): AppData {
   if (!out.habits?.length) out.habits = DEFAULT_HABITS.map((h) => ({ ...h }));
   out.chat ??= [];
   out.favorites ??= { recipes: [], foods: [] };
+  out.replacements ??= [];
   out.shopping ??= {};
   // Revisión semanal: los datos anteriores a esta función empiezan con la semana actual revisada
   if (out.onboarded && !out.weeklyReview) out.weeklyReview = { lastCompleted: startOfWeek(todayISO()) };

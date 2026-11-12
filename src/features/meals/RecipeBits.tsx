@@ -9,7 +9,7 @@ import { n0 } from '../../lib/format';
  * Portada ilustrada de la receta. Si hay fotografía (`imageUrl`) se muestra;
  * si no, una superficie tintada con el icono del ingrediente principal.
  */
-export function RecipeCover({ recipe, size = 56, className, rounded = 'rounded-[14px]' }: { recipe?: Recipe; size?: number | 'full'; className?: string; rounded?: string }) {
+export function RecipeCover({ recipe, size = 56, className, rounded = 'rounded-[14px]', labelled = false }: { recipe?: Recipe; size?: number | 'full'; className?: string; rounded?: string; labelled?: boolean }) {
   const style = size === 'full' ? undefined : { width: size, height: size };
   if (!recipe) {
     return (
@@ -19,7 +19,7 @@ export function RecipeCover({ recipe, size = 56, className, rounded = 'rounded-[
     );
   }
   if (recipe.imageUrl) {
-    return <img src={recipe.imageUrl} alt="" className={cx('shrink-0 object-cover', rounded, className)} style={style} />;
+    return <img src={recipe.imageUrl} alt="" loading="lazy" className={cx('shrink-0 object-cover', rounded, className)} style={style} />;
   }
   const Icon = RECIPE_ICONS[recipe.icon];
   const iconSize = size === 'full' ? 56 : Math.round((size as number) * 0.44);
@@ -33,6 +33,11 @@ export function RecipeCover({ recipe, size = 56, className, rounded = 'rounded-[
       style={{ ...style, ['--h' as string]: recipe.hue }}
     >
       <Icon size={iconSize} strokeWidth={1.6} className="recipe-cover-icon relative" />
+      {labelled && (
+        <span className="absolute bottom-2 right-2 rounded-full bg-surface/85 px-2 py-0.5 text-[11px] font-semibold text-ink2 backdrop-blur" data-cover-illustration>
+          Ilustración · sin foto real
+        </span>
+      )}
       {big &&
         dots.map((c, i) => (
           <span

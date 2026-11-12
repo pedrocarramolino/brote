@@ -1,3 +1,4 @@
+import { recipeTitle } from './recipeMeta';
 import { CATEGORY_ORDER } from '../data/foods';
 import type { AppData, Food, ISODate, ShopCategory, ShoppingOverrides } from '../types';
 import { n0, n1 } from '../lib/format';
@@ -73,7 +74,7 @@ export function buildShoppingList(data: AppData, monday: ISODate): { groups: Sho
     for (const ing of mealIngredients(data, meal)) {
       const cur = acc.get(ing.foodId) ?? { amount: 0, usedIn: new Set<string>() };
       cur.amount += ing.amount * meal.portion;
-      cur.usedIn.add(r.name);
+      cur.usedIn.add(recipeTitle(r));
       acc.set(ing.foodId, cur);
     }
   }

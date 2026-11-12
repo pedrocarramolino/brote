@@ -9,7 +9,8 @@
     "build:single": "tsc -b && vite build --mode single",
     "preview": "vite preview",
     "typecheck": "tsc -b",
-    "icons": "node scripts/icons.mjs"
+    "icons": "node scripts/icons.mjs",
+    "check:library": "esbuild scripts/check-library.ts --bundle --platform=node --log-level=warning --outfile=node_modules/.cache/check-library.cjs && node node_modules/.cache/check-library.cjs"
   },
   "dependencies": {
     "lucide-react": "0.460.0",

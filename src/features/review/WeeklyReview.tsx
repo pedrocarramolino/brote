@@ -21,6 +21,9 @@ import {
 import { ALLERGEN_LABELS } from '../../data/foods';
 import { ALLERGENS, COOK_TIMES, DIETS, DISLIKE_SUGGESTIONS, GOALS, LEVELS } from '../../data/options';
 import { MEASURES } from '../progress/EntrySheets';
+import { recipeTitle } from '../../services/recipeMeta';
+
+const titleOf = (r: { title?: string; name: string } | undefined) => (r ? recipeTitle(r) : undefined);
 
 const STEPS = ['Tu semana', 'Preferencias', 'Menú', 'Resumen'] as const;
 
@@ -160,11 +163,11 @@ export function WeeklyReviewSheet({ open, onClose, today }: { open: boolean; onC
     .filter(({ dec }) => dec.kind !== 'keep');
   for (const { it, dec } of menuChanges) {
     const when = `${formatWeekdayShort(it.meal.date)} · ${SLOT_META[it.meal.slot].label}`;
-    const name = getRecipe(data, it.meal.recipeId)?.name ?? it.meal.customName ?? 'Plato';
+    const name = titleOf(getRecipe(data, it.meal.recipeId)) ?? it.meal.customName ?? 'Plato';
     summary.push(dec.kind === 'remove' ? `${when}: quitar ${name}` : dec.kind === 'recipe' ? `${when}: ${name} → ${dec.label}` : `${when}: ${name} (${dec.kind === 'ingredients' ? dec.label : ''})`);
   }
   const addList = additions.filter(isAdded);
-  for (const a of addList) summary.push(`${formatWeekdayShort(a.date)} · ${SLOT_META[a.slot].label}: añadir ${getRecipe(data, a.recipeId)?.name}`);
+  for (const a of addList) summary.push(`${formatWeekdayShort(a.date)} · ${SLOT_META[a.slot].label}: añadir ${titleOf(getRecipe(data, a.recipeId))}`);
   if (prefsAffectPlan && futureWeeks.length) summary.push('Las semanas siguientes ya creadas recalculan sus platos pendientes con tus nuevas preferencias');
 
   /* ------------------------------ aplicar ------------------------------ */
@@ -358,7 +361,7 @@ export function WeeklyReviewSheet({ open, onClose, today }: { open: boolean; onC
                           <span className={cx('flex h-6 w-6 shrink-0 items-center justify-center rounded-full', on ? 'bg-accent text-accentInk' : 'bg-surface2 text-ink3')}><Plus size={14} /></span>
                           <span className="min-w-0 flex-1">
                             <span className="block text-[13px] text-ink3">{formatWeekdayShort(a.date)}, {formatShort(a.date)} · {SLOT_META[a.slot].label}</span>
-                            <span className="block truncate text-[15px] font-medium">{getRecipe(data, a.recipeId)?.name}</span>
+                            <span className="block truncate text-[15px] font-medium">{titleOf(getRecipe(data, a.recipeId))}</span>
                           </span>
                         </button>
                       </li>
@@ -411,7 +414,7 @@ export function WeeklyReviewSheet({ open, onClose, today }: { open: boolean; onC
 
 function MealRow({ it, value, onChange }: { it: ReturnType<typeof reviewMenu>[number]; value: string; onChange: (k: string) => void }) {
   const data = useData();
-  const name = getRecipe(data, it.meal.recipeId)?.name ?? it.meal.customName ?? 'Plato';
+  const name = titleOf(getRecipe(data, it.meal.recipeId)) ?? it.meal.customName ?? 'Plato';
   const id = `dec-${it.meal.id}`;
   return (
     <li className={cx('rounded-[14px] p-3 ring-1', it.conflicts.length ? 'ring-warn/50' : 'ring-line')} data-review-meal={it.meal.id}>

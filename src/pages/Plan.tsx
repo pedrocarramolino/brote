@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import { ArrowLeftRight, BookOpen, ChevronLeft, ChevronRight, Clock, Sparkles } from 'lucide-react';
+import { ArrowLeftRight, BookOpen, CheckCheck, ChevronLeft, ChevronRight, Clock, Info, Lock, RefreshCw, Shuffle, Sparkles } from 'lucide-react';
 import type { PlannedMeal, Recipe } from '../types';
 import { PageHeader } from '../components/layout/AppShell';
 import { Button, Card, EmptyState, IconButton, ProgressBar, SectionTitle, cx } from '../components/ui/primitives';
-import { useData, useWeek } from '../store/AppStore';
+import { useData, useStore, useWeek } from '../store/AppStore';
+import { useFeedback } from '../components/ui/Feedback';
+import { acceptWeek, planDiagnostics, regenerateDay, regenerateWeek } from '../services/planner';
+import { recipeTitle } from '../services/recipeMeta';
 import { addDays, formatLong, formatWeekRange, formatWeekdayShort, fromISO, startOfWeek, todayISO, weekDates } from '../lib/dates';
 import { n0 } from '../lib/format';
 import { navigate } from '../lib/router';
@@ -23,6 +26,8 @@ export function PlanPage({ dateParam }: { dateParam: string | null }) {
   const monday = startOfWeek(selected);
   const weekMeals = useWeek(monday);
   const { toggleDone } = useMealActions();
+  const { mutate } = useStore();
+  const { toast, confirm } = useFeedback();
   const slots = slotsOrdered(data.profile.mealSlots);
 
   const [recipeView, setRecipeView] = useState<{ recipe: Recipe; meal?: PlannedMeal } | null>(null);
@@ -35,6 +40,25 @@ export function PlanPage({ dateParam }: { dateParam: string | null }) {
     return n ? addMacros(acc, n) : acc;
   }, ZERO);
   const done = dayMeals.filter((m) => m.status === 'hecha').length;
+
+  const pendingDay = dayMeals.filter((m) => m.status === 'pendiente');
+  const changeDay = async () => {
+    if (!pendingDay.length) return;
+    const ok = await confirm({
+      title: 'Cambiar el día entero',
+      message: `Se propondrán platos nuevos para las ${pendingDay.length} comidas pendientes del ${formatLong(selected).toLowerCase()}. El resto de la semana no cambia.`,
+      confirmLabel: 'Cambiar día',
+    });
+    if (!ok) return;
+    const before = structuredClone(data.plan[monday] ?? []);
+    const beforeRep = data.replacements?.length ?? 0;
+    const draft = structuredClone(data);
+    const n = regenerateDay(draft, selected, `dia-${Date.now()}`);
+    mutate((d) => { d.plan[monday] = draft.plan[monday]; d.replacements = draft.replacements; });
+    toast(n ? `Día renovado: ${n} ${n === 1 ? 'plato nuevo' : 'platos nuevos'}` : 'No hay más opciones compatibles para este día', {
+      action: { label: 'Deshacer', onClick: () => mutate((d) => { d.plan[monday] = before; d.replacements?.splice(beforeRep); }) },
+    });
+  };
 
   const liveMeal = recipeView?.meal ? weekMeals.find((m) => m.id === recipeView.meal!.id) : undefined;
   const liveSwap = swapMeal ? weekMeals.find((m) => m.id === swapMeal.id) ?? swapMeal : null;
@@ -96,6 +120,8 @@ export function PlanPage({ dateParam }: { dateParam: string | null }) {
         </div>
       </Card>
 
+      <WeekActions monday={monday} />
+
       <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0">
           <div className="mb-3 flex items-end justify-between gap-3 px-1">
@@ -103,9 +129,16 @@ export function PlanPage({ dateParam }: { dateParam: string | null }) {
               <h2 className="text-[20px] font-bold tracking-tight">{formatLong(selected)}</h2>
               <p className="text-[14px] text-ink2">{done} de {dayMeals.length} platos completados</p>
             </div>
-            {selected !== today && (
-              <Button size="sm" variant="secondary" onClick={() => navigate('hoy', { d: selected })}>Abrir en Hoy</Button>
-            )}
+            <div className="flex shrink-0 gap-2">
+              {pendingDay.length > 0 && selected >= today && (
+                <Button size="sm" variant="secondary" icon={<Shuffle size={16} />} onClick={changeDay} data-change-day>
+                  Cambiar día
+                </Button>
+              )}
+              {selected !== today && (
+                <Button size="sm" variant="secondary" onClick={() => navigate('hoy', { d: selected })}>Abrir en Hoy</Button>
+              )}
+            </div>
           </div>
 
           {dayMeals.length === 0 ? (
@@ -129,10 +162,12 @@ export function PlanPage({ dateParam }: { dateParam: string | null }) {
                       <button type="button" disabled={!r} onClick={() => r && setRecipeView({ recipe: r, meal: m })} className="flex min-w-0 flex-1 items-center gap-3 rounded-[14px] text-left sm:gap-4">
                         <RecipeCover recipe={r} size={68} />
                         <span className="min-w-0 flex-1">
-                          <span className="block text-[12px] font-semibold uppercase tracking-wide text-ink3">
+                          <span className="flex items-center gap-1 text-[12px] font-semibold uppercase tracking-wide text-ink3">
                             {SLOT_META[slot].label} · {data.profile.schedule[slot] ?? SLOT_META[slot].time}
+                            {m.accepted && m.status === 'pendiente' && <Lock size={11} className="text-accent" aria-label="Aceptado" />}
                           </span>
-                          <span className="mt-0.5 block text-[16px] font-semibold leading-snug">{r?.name ?? m.customName}</span>
+                          <span className="mt-0.5 block text-[16px] font-semibold leading-snug">{r ? recipeTitle(r) : m.customName}</span>
+                          {r?.title && <span className="block truncate text-[13px] leading-snug text-ink3">{r.name}</span>}
                           {n ? <MacroInline m={n} className="mt-0.5" /> : <span className="mt-0.5 block text-[13px] text-warn">Sin valores verificados</span>}
                         </span>
                       </button>
@@ -203,6 +238,70 @@ function LibraryLink() {
         </span>
         <ChevronRight size={20} className="shrink-0 text-ink3" />
       </button>
+    </section>
+  );
+}
+
+/** Acciones sobre la propuesta de la semana: aceptar, pedir otra propuesta y avisos de limitaciones. */
+function WeekActions({ monday }: { monday: string }) {
+  const data = useData();
+  const { mutate } = useStore();
+  const { toast, confirm } = useFeedback();
+  const today = todayISO();
+  const from = monday > today ? monday : today;
+  const meals = (data.plan[monday] ?? []).filter((m) => data.profile.mealSlots.includes(m.slot) && m.date >= from && m.status === 'pendiente');
+  if (!meals.length) return null;
+  const accepted = meals.filter((m) => m.accepted).length;
+  const open = meals.length - accepted;
+  const diag = planDiagnostics(data, monday);
+
+  const accept = () => {
+    const before = structuredClone(data.plan[monday]);
+    mutate((d) => void acceptWeek(d, monday));
+    toast('Menú aceptado: no cambiará al pedir otra propuesta', { action: { label: 'Deshacer', onClick: () => mutate((d) => void (d.plan[monday] = before)) } });
+  };
+  const regenerate = async () => {
+    const ok = await confirm({
+      title: 'Nueva propuesta',
+      message: accepted
+        ? `Se cambiarán los ${open} platos pendientes que aún no has aceptado. Los ${accepted} aceptados y los ya hechos se mantienen.`
+        : `Se propondrán platos nuevos para los ${open} platos pendientes de esta semana. Los ya hechos se mantienen.`,
+      confirmLabel: 'Generar',
+    });
+    if (!ok) return;
+    const before = structuredClone(data.plan[monday]);
+    const beforeRep = data.replacements?.length ?? 0;
+    const draft = structuredClone(data);
+    const n = regenerateWeek(draft, monday, from, `semana-${Date.now()}`);
+    mutate((d) => { d.plan[monday] = draft.plan[monday]; d.replacements = draft.replacements; });
+    toast(n ? `Nueva propuesta: ${n} ${n === 1 ? 'plato cambiado' : 'platos cambiados'}` : 'No hay más opciones compatibles', {
+      action: { label: 'Deshacer', onClick: () => mutate((d) => { d.plan[monday] = before; d.replacements?.splice(beforeRep); }) },
+    });
+  };
+
+  return (
+    <section className="mt-3 rounded-xl2 bg-surface px-4 py-3 shadow-card ring-1 ring-line/60" aria-label="Propuesta de la semana" data-week-actions>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+        <p className="min-w-0 text-[14px] leading-snug text-ink2 sm:flex-1">
+          <span className="font-semibold text-ink">{open === 0 ? 'Menú aceptado' : 'Propuesta de la semana'}</span>
+          <span className="tabular"> · {accepted} de {meals.length} platos pendientes aceptados</span>
+        </p>
+        <div className="flex gap-2 [&>*]:flex-1 sm:[&>*]:flex-none">
+          <Button size="sm" variant="secondary" icon={<RefreshCw size={16} />} onClick={regenerate} disabled={open === 0} data-regenerate-week>
+            Otra propuesta
+          </Button>
+          <Button size="sm" variant={open ? 'primary' : 'tinted'} icon={<CheckCheck size={16} />} onClick={accept} disabled={open === 0} data-accept-week>
+            {open ? 'Aceptar menú' : 'Aceptado'}
+          </Button>
+        </div>
+      </div>
+      {diag.notes.length > 0 && (
+        <ul className="mt-2 space-y-1 text-[13px] leading-snug text-ink3" data-plan-notes>
+          {diag.notes.map((n) => (
+            <li key={n} className="flex items-start gap-1.5"><Info size={14} className="mt-[2px] shrink-0" />{n}</li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

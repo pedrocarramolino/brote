@@ -9,7 +9,7 @@ import { getFood, SLOT_META } from '../../services/catalog';
 import { n0, normalize } from '../../lib/format';
 import { surpriseRecipe } from '../../services/planner';
 import { recipeNutrition } from '../../services/nutrition';
-import { CATEGORY_META } from '../../services/recipeMeta';
+import { CATEGORY_META, recipeMatches, recipeTitle } from '../../services/recipeMeta';
 import { MacroInline, RecipeCover } from './RecipeBits';
 import { useMealActions } from './useMealActions';
 
@@ -56,8 +56,7 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
     const nq = normalize(q.trim());
     return result.alternatives.filter((a) => {
       if (maxMin && a.recipe.minutes > maxMin) return false;
-      if (!nq) return true;
-      return normalize(a.recipe.name).includes(nq) || a.recipe.ingredients.some((i) => normalize(getFood(data, i.foodId)?.name ?? '').includes(nq));
+      return recipeMatches(data, a.recipe, nq, normalize);
     });
   }, [result, q, maxMin, data]);
   if (!meal || !result) return null;
@@ -88,7 +87,7 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
       }
       swap(meal, { customName: name });
     } else if (selected) {
-      swap(meal, { recipeId: selected.recipe.id });
+      swap(meal, { recipeId: selected.recipe.id }, selected.reasons.includes('Sorpréndeme') ? 'sorpresa' : 'manual');
     }
     onClose();
   };
@@ -101,7 +100,7 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
       onClose={onClose}
       title={title}
       size="lg"
-      subtitle={`${SLOT_META[meal.slot].label} · sustituye a ${original.recipe?.name ?? meal.customName ?? 'plato sin receta'}`}
+      subtitle={`${SLOT_META[meal.slot].label} · sustituye a ${original.recipe ? recipeTitle(original.recipe) : meal.customName ?? 'plato sin receta'}`}
       footer={
         selected || freeMode ? (
           <div className="flex gap-2">
@@ -166,10 +165,10 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
                   >
                     <RecipeCover recipe={a.recipe} size={56} />
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[16px] font-semibold leading-snug">{a.recipe.name}</span>
+                      <span className="block text-[16px] font-semibold leading-snug">{recipeTitle(a.recipe)}</span>
                       <span className="block truncate text-[12px] text-ink3">
                         {scope === 'all' && `${CATEGORY_META[a.recipe.category].label} · `}
-                        {a.recipe.ingredients.slice(0, 4).map((i) => getFood(data, i.foodId)?.name.toLowerCase()).join(', ')}
+                        {a.recipe.title ? a.recipe.name : a.recipe.ingredients.slice(0, 4).map((i) => getFood(data, i.foodId)?.name.toLowerCase()).join(', ')}
                       </span>
                       <span className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[13px]">
                         <span className="tabular text-ink2">{n0(a.macros.kcal)} kcal</span>
@@ -215,8 +214,10 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
           <div className="mb-4 flex items-center gap-3">
             <RecipeCover recipe={selected.recipe} size={72} />
             <div className="min-w-0">
-              <h3 className="text-[18px] font-bold leading-snug">{selected.recipe.name}</h3>
-              <p className="text-[14px] text-ink2">{selected.recipe.minutes} min · {selected.recipe.ingredients.length} ingredientes</p>
+              {selected.reasons.includes('Sorpréndeme') && <p className="text-[12px] font-semibold uppercase tracking-wide text-accent">Sorpréndeme</p>}
+              <h3 className="text-[18px] font-bold leading-snug">{recipeTitle(selected.recipe)}</h3>
+              {selected.recipe.title && <p className="text-[14px] leading-snug text-ink2">{selected.recipe.name}</p>}
+              <p className="text-[13px] text-ink3">{selected.recipe.minutes} min · {selected.recipe.ingredients.length} ingredientes</p>
             </div>
           </div>
 

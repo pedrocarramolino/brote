@@ -1,20 +1,23 @@
 import type React from 'react';
 import { useMemo, useState } from 'react';
-import { ChevronLeft, Clock, Heart, Search, SlidersHorizontal, X } from 'lucide-react';
-import type { Difficulty, MainIngredient, Recipe, RecipeCategory } from '../types';
+import { ChevronLeft, ChevronRight, Clock, Heart, History, Search, Shuffle, SlidersHorizontal, X } from 'lucide-react';
+import type { Cuisine, Difficulty, MainIngredient, Recipe, RecipeCategory } from '../types';
 import { PageHeader } from '../components/layout/AppShell';
 import { Badge, Button, Card, Chip, EmptyState, IconButton, Segmented, Toggle, cx } from '../components/ui/primitives';
 import { Sheet } from '../components/ui/Sheet';
 import { useData } from '../store/AppStore';
 import { n0, normalize } from '../lib/format';
 import { navigate } from '../lib/router';
-import { allRecipes, getFood } from '../services/catalog';
+import { allRecipes } from '../services/catalog';
+import { COLLECTIONS, recipeHistory } from '../services/library';
 import { recipeFit } from '../services/nutrition';
 import {
-  CATEGORY_META, CATEGORY_ORDER, DIET_LABEL, DIFFICULTY_LABEL, MAIN_LABEL, dietLabels, recipeMacros, type DietLabel,
+  CATEGORY_META, CATEGORY_ORDER, CUISINE_LABEL, CUISINE_ORDER, DIET_LABEL, DIFFICULTY_LABEL, MAIN_LABEL, dietLabels, recipeMacros, recipeMatches, recipeTitle, type DietLabel,
 } from '../services/recipeMeta';
 import { RecipeCover } from '../features/meals/RecipeBits';
 import { RecipeSheet } from '../features/meals/RecipeSheet';
+import { AddToPlanSheet } from '../features/meals/AddToPlanSheet';
+import { SurpriseSheet } from '../features/meals/SurpriseSheet';
 
 type TimeF = 'all' | '10' | '20' | '30' | '45';
 type KcalF = 'all' | 'lt250' | '250-450' | '450-650' | 'gt650';
@@ -28,11 +31,15 @@ interface Filters {
   mains: MainIngredient[];
   difficulty: Difficulty[];
   diets: DietLabel[];
+  cuisines: Cuisine[];
   compatible: boolean;
   favorites: boolean;
+  recent: boolean;
+  /** colección activa (ver todas) */
+  collection: string | null;
 }
 
-const EMPTY: Filters = { time: 'all', kcal: 'all', protein: 'all', mains: [], difficulty: [], diets: [], compatible: false, favorites: false };
+const EMPTY: Filters = { time: 'all', kcal: 'all', protein: 'all', mains: [], difficulty: [], diets: [], cuisines: [], compatible: false, favorites: false, recent: false, collection: null };
 
 const MAIN_GROUPS: MainIngredient[] = ['pollo', 'pavo', 'ternera', 'cerdo', 'pescado_blanco', 'pescado_azul', 'atun', 'marisco', 'huevo', 'lacteo', 'legumbre', 'proteina_vegetal', 'cereal', 'verdura', 'fruta'];
 
@@ -40,7 +47,8 @@ const KCAL_RANGE: Record<Exclude<KcalF, 'all'>, [number, number]> = { lt250: [0,
 
 function countActive(f: Filters) {
   return (
-    Number(f.time !== 'all') + Number(f.kcal !== 'all') + Number(f.protein !== 'all') + f.mains.length + f.difficulty.length + f.diets.length + Number(f.compatible) + Number(f.favorites)
+    Number(f.time !== 'all') + Number(f.kcal !== 'all') + Number(f.protein !== 'all') + f.mains.length + f.difficulty.length + f.diets.length + f.cuisines.length +
+    Number(f.compatible) + Number(f.favorites) + Number(f.recent) + Number(!!f.collection)
   );
 }
 
@@ -52,6 +60,8 @@ export function RecipesPage() {
   const [sheet, setSheet] = useState(false);
   const [sort, setSort] = useState<Sort>('recomendadas');
   const [open, setOpen] = useState<Recipe | null>(null);
+  const [adding, setAdding] = useState<{ recipe: Recipe; source: 'manual' | 'sorpresa' } | null>(null);
+  const [surpriseOpen, setSurpriseOpen] = useState(false);
 
   const library = useMemo(() => allRecipes(data).filter((r) => !r.custom), [data]);
 
@@ -61,12 +71,23 @@ export function RecipesPage() {
     return c;
   }, [library]);
 
+  const history = useMemo(() => recipeHistory(data), [data]);
+  const collectionIds = useMemo(() => {
+    const c = COLLECTIONS.find((x) => x.id === filters.collection);
+    return c ? c.pick(data, library).map((r) => r.id) : null;
+  }, [filters.collection, data, library]);
+
   const list = useMemo(() => {
     const nq = normalize(q.trim());
     const favs = new Set(data.favorites.recipes);
+    const recentOrder = new Map(history.map((h, i) => [h.recipe.id, i]));
+    const inCollection = collectionIds ? new Map(collectionIds.map((id, i) => [id, i])) : null;
     const res = library.filter((r) => {
       if (cat && r.category !== cat) return false;
       if (filters.favorites && !favs.has(r.id)) return false;
+      if (filters.recent && !recentOrder.has(r.id)) return false;
+      if (inCollection && !inCollection.has(r.id)) return false;
+      if (filters.cuisines.length && (!r.cuisine || !filters.cuisines.includes(r.cuisine))) return false;
       if (filters.time !== 'all' && r.minutes > Number(filters.time)) return false;
       if (filters.mains.length && !filters.mains.includes(r.main)) return false;
       if (filters.difficulty.length && !filters.difficulty.includes(r.difficulty)) return false;
@@ -82,22 +103,23 @@ export function RecipesPage() {
         if (!filters.diets.every(has)) return false;
       }
       if (filters.compatible && !recipeFit(data, r, data.profile).ok) return false;
-      if (nq) {
-        const inName = normalize(r.name).includes(nq);
-        const inIngredients = r.ingredients.some((i) => normalize(getFood(data, i.foodId)?.name ?? '').includes(nq));
-        if (!inName && !inIngredients) return false;
-      }
+      if (nq && !recipeMatches(data, r, nq, normalize)) return false;
       return true;
     });
     const by: Record<Sort, (a: Recipe, b: Recipe) => number> = {
-      recomendadas: (a, b) => Number(favs.has(b.id)) - Number(favs.has(a.id)) || CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category),
+      recomendadas: (a, b) =>
+        (filters.recent ? (recentOrder.get(a.id) ?? 0) - (recentOrder.get(b.id) ?? 0) : 0) ||
+        (inCollection ? (inCollection.get(a.id) ?? 0) - (inCollection.get(b.id) ?? 0) : 0) ||
+        Number(favs.has(b.id)) - Number(favs.has(a.id)) ||
+        CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category),
       tiempo: (a, b) => a.minutes - b.minutes,
       kcal: (a, b) => recipeMacros(data, a).kcal - recipeMacros(data, b).kcal,
       proteina: (a, b) => recipeMacros(data, b).protein - recipeMacros(data, a).protein,
-      nombre: (a, b) => a.name.localeCompare(b.name, 'es'),
+      nombre: (a, b) => recipeTitle(a).localeCompare(recipeTitle(b), 'es'),
     };
     return res.sort(by[sort]);
-  }, [library, q, cat, filters, sort, data]);
+  }, [library, q, cat, filters, sort, data, history, collectionIds]);
+  const browsing = !q.trim() && !cat && countActive(filters) === 0;
 
   const active = countActive(filters);
   const set = <K extends keyof Filters>(k: K, v: Filters[K]) => setFilters((f) => ({ ...f, [k]: v }));
@@ -113,6 +135,11 @@ export function RecipesPage() {
         }
         title="Recetas"
         subtitle={`${library.length} recetas · cantidades por ración y valores calculados por ingredientes`}
+        actions={
+          <Button variant="tinted" icon={<Shuffle size={18} />} onClick={() => setSurpriseOpen(true)} data-open-surprise>
+            Sorpréndeme
+          </Button>
+        }
       />
 
       <div className="mb-3 flex gap-2">
@@ -123,7 +150,7 @@ export function RecipesPage() {
             type="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Nombre o ingrediente"
+            placeholder="Busca «pollo», «Tosta Brutal», «lentejas»…"
             className="h-full w-full min-w-0 bg-transparent text-[16px] placeholder:text-ink3 focus:outline-none"
             data-recipe-search
           />
@@ -143,6 +170,52 @@ export function RecipesPage() {
         ))}
       </div>
 
+      <div className="no-scrollbar -mx-4 mb-3 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0" data-no-swipe>
+        <Chip selected={filters.favorites} onClick={() => set('favorites', !filters.favorites)}>
+          <Heart size={14} className="mr-1" /> Favoritas <span className="tabular ml-1 text-ink3">{data.favorites.recipes.length}</span>
+        </Chip>
+        <Chip selected={filters.recent} onClick={() => set('recent', !filters.recent)}>
+          <History size={14} className="mr-1" /> Recientes <span className="tabular ml-1 text-ink3">{history.length}</span>
+        </Chip>
+      </div>
+
+      {browsing && (
+        <div className="mb-5 space-y-5" data-collections>
+          {COLLECTIONS.map((c) => {
+            const items = c.pick(data, library);
+            if (items.length < 3) return null;
+            return (
+              <section key={c.id} aria-labelledby={`col-${c.id}`}>
+                <div className="mb-2 flex items-end justify-between gap-2">
+                  <div className="min-w-0">
+                    <h2 id={`col-${c.id}`} className="text-[17px] font-bold tracking-tight">{c.title}</h2>
+                    <p className="truncate text-[13px] text-ink3">{c.subtitle}</p>
+                  </div>
+                  <button type="button" className="inline-flex shrink-0 items-center text-[14px] font-semibold text-accent" onClick={() => set('collection', c.id)} data-collection={c.id}>
+                    Ver {items.length} <ChevronRight size={16} />
+                  </button>
+                </div>
+                <ul className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0" data-no-swipe>
+                  {items.slice(0, 10).map((r) => {
+                    const m = recipeMacros(data, r);
+                    return (
+                      <li key={r.id} className="w-[148px] shrink-0">
+                        <button type="button" onClick={() => setOpen(r)} className="press block w-full text-left">
+                          <RecipeCover recipe={r} size="full" className="h-[96px] w-full" rounded="rounded-[14px]" />
+                          <span className="mt-1.5 line-clamp-2 text-[14px] font-semibold leading-snug">{recipeTitle(r)}</span>
+                          <span className="tabular block text-[12px] text-ink3">{n0(m.kcal)} kcal · {r.minutes} min</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            );
+          })}
+          <h2 className="text-[17px] font-bold tracking-tight">Todas las recetas</h2>
+        </div>
+      )}
+
       <div className="mb-3 flex items-center justify-between gap-2 text-[14px] text-ink2">
         <span className="tabular" data-result-count>{list.length} {list.length === 1 ? 'receta' : 'recetas'}</span>
         <label className="flex items-center gap-1.5">
@@ -159,7 +232,10 @@ export function RecipesPage() {
 
       {active > 0 && (
         <div className="mb-3 flex flex-wrap gap-1.5">
+          {filters.collection && <ActiveChip onClear={() => set('collection', null)}>{COLLECTIONS.find((c) => c.id === filters.collection)?.title}</ActiveChip>}
           {filters.favorites && <ActiveChip onClear={() => set('favorites', false)}>Favoritas</ActiveChip>}
+          {filters.recent && <ActiveChip onClear={() => set('recent', false)}>Recientes</ActiveChip>}
+          {filters.cuisines.map((c) => <ActiveChip key={c} onClear={() => set('cuisines', filters.cuisines.filter((x) => x !== c))}>Cocina {CUISINE_LABEL[c].toLowerCase()}</ActiveChip>)}
           {filters.compatible && <ActiveChip onClear={() => set('compatible', false)}>Compatibles con mi perfil</ActiveChip>}
           {filters.time !== 'all' && <ActiveChip onClear={() => set('time', 'all')}>≤ {filters.time} min</ActiveChip>}
           {filters.kcal !== 'all' && <ActiveChip onClear={() => set('kcal', 'all')}>{kcalLabel(filters.kcal)}</ActiveChip>}
@@ -174,7 +250,11 @@ export function RecipesPage() {
       {list.length === 0 ? (
         <Card>
           <EmptyState icon={filters.favorites ? <Heart size={24} /> : <Search size={24} />} title="Sin resultados">
-            {filters.favorites && !data.favorites.recipes.length ? 'Abre una receta y pulsa el corazón para guardarla.' : 'Prueba con otra búsqueda o quita algún filtro.'}
+            {filters.favorites && !data.favorites.recipes.length
+              ? 'Abre una receta y pulsa el corazón para guardarla.'
+              : filters.recent && !history.length
+                ? 'Aquí aparecerán las recetas de tu menú a medida que pasen los días.'
+                : 'Prueba con otra búsqueda o quita algún filtro.'}
           </EmptyState>
         </Card>
       ) : (
@@ -190,9 +270,10 @@ export function RecipesPage() {
                     <RecipeCover recipe={r} size={52} />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-start gap-1.5">
-                        <span className="min-w-0 flex-1 text-[15px] font-semibold leading-snug">{r.name}</span>
+                        <span className="min-w-0 flex-1 text-[15px] font-semibold leading-snug">{recipeTitle(r)}</span>
                         {fav && <Heart size={14} className="mt-1 shrink-0 fill-danger text-danger" aria-label="Favorita" />}
                       </span>
+                      {r.title && <span className="line-clamp-1 text-[13px] leading-snug text-ink3">{r.name}</span>}
                       <span className="tabular mt-0.5 flex flex-wrap gap-x-2 text-[13px] text-ink2">
                         <span className="font-semibold text-ink">{n0(m.kcal)} kcal</span>
                         <span className="text-protein">P {n0(m.protein)} g</span>
@@ -238,6 +319,11 @@ export function RecipesPage() {
           <Group label="Proteína por ración">
             <Segmented label="Proteína" value={filters.protein} onChange={(v) => set('protein', v)} options={[{ value: 'all', label: 'Todo' }, { value: '15', label: '≥15 g' }, { value: '25', label: '≥25 g' }, { value: '35', label: '≥35 g' }]} />
           </Group>
+          <Group label="Cocina">
+            <div className="flex flex-wrap gap-2">
+              {CUISINE_ORDER.map((c) => <Chip key={c} selected={filters.cuisines.includes(c)} onClick={() => set('cuisines', toggleIn(filters.cuisines, c))}>{CUISINE_LABEL[c]}</Chip>)}
+            </div>
+          </Group>
           <Group label="Ingrediente principal">
             <div className="flex flex-wrap gap-2">
               {MAIN_GROUPS.map((m) => <Chip key={m} selected={filters.mains.includes(m)} onClick={() => set('mains', toggleIn(filters.mains, m))}>{MAIN_LABEL[m]}</Chip>)}
@@ -256,7 +342,19 @@ export function RecipesPage() {
         </div>
       </Sheet>
 
-      <RecipeSheet recipe={open ?? undefined} open={!!open} onClose={() => setOpen(null)} />
+      <RecipeSheet
+        recipe={open ?? undefined}
+        open={!!open}
+        onClose={() => setOpen(null)}
+        onAddToPlan={open ? () => { setAdding({ recipe: open, source: 'manual' }); setOpen(null); } : undefined}
+      />
+      <SurpriseSheet
+        open={surpriseOpen}
+        onClose={() => setSurpriseOpen(false)}
+        onOpen={(r) => { setSurpriseOpen(false); setOpen(r); }}
+        onAdd={(r) => { setSurpriseOpen(false); setAdding({ recipe: r, source: 'sorpresa' }); }}
+      />
+      <AddToPlanSheet recipe={adding?.recipe ?? null} source={adding?.source} open={!!adding} onClose={() => setAdding(null)} />
     </>
   );
 }

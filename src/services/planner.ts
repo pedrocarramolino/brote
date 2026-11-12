@@ -1,7 +1,7 @@
-import type { AppData, ISODate, MainIngredient, MealSlot, PlannedMeal, Recipe } from '../types';
+import type { AppData, ISODate, MainIngredient, MealReplacement, MealSlot, PlannedMeal, Recipe } from '../types';
 import { addDays, weekDates } from '../lib/dates';
 import { normalize, uid } from '../lib/format';
-import { ALL_SLOTS, allRecipes, getFood } from './catalog';
+import { ALL_SLOTS, allRecipes, getFood, getRecipe } from './catalog';
 import { recipeFit, recipeNutrition } from './nutrition';
 
 /** Recetas candidatas para un tipo de comida según el perfil (dieta, alergias, alimentos que no gustan y tiempo). */
@@ -60,18 +60,48 @@ function infoOf(data: AppData, r: Recipe, likes: string[]): RecipeInfo {
   return { kcal, veg, liked };
 }
 
+/** Semanas que cubre la rotación: no se repite una receta usada en las 4 semanas anteriores si hay alternativa. */
+export const ROTATION_WEEKS = 4;
+
 /**
  * Uso reciente de cada receta en las semanas anteriores ya planificadas
- * (peso 3 = semana pasada, 2 = hace dos semanas, 1 = hace tres).
+ * (peso 4 = semana pasada … 1 = hace cuatro semanas).
  */
 function recentUse(data: AppData, monday: ISODate): Map<string, number> {
   const out = new Map<string, number>();
-  for (let w = 1; w <= 3; w++) {
+  for (let w = 1; w <= ROTATION_WEEKS; w++) {
     const prev = data.plan[addDays(monday, -7 * w)];
     if (!prev) continue;
-    for (const m of prev) if (m.recipeId) out.set(m.recipeId, (out.get(m.recipeId) ?? 0) + (4 - w));
+    for (const m of prev) if (m.recipeId) out.set(m.recipeId, (out.get(m.recipeId) ?? 0) + (ROTATION_WEEKS + 1 - w));
   }
   return out;
+}
+
+/** Recetas usadas hace 5–10 semanas: se pueden «recuperar» sin que parezca el mismo plan. */
+function olderUse(data: AppData, monday: ISODate): Set<string> {
+  const out = new Set<string>();
+  for (let w = ROTATION_WEEKS + 1; w <= 10; w++) for (const m of data.plan[addDays(monday, -7 * w)] ?? []) if (m.recipeId) out.add(m.recipeId);
+  return out;
+}
+
+/** Recetas que el usuario ha cambiado por otra en las últimas 8 semanas (señal de que no le apetecen). */
+function rejected(data: AppData, monday: ISODate): Set<string> {
+  const from = addDays(monday, -56);
+  return new Set((data.replacements ?? []).filter((x) => x.date >= from && x.fromRecipeId && x.source !== 'regenerar').map((x) => x.fromRecipeId!));
+}
+
+/** Ingredientes «de despensa» que no cuentan para la variedad (aparecen en casi todo). */
+const PANTRY = new Set(['aceite', 'ajo', 'cebolla', 'sal', 'limon', 'perejil', 'caldo', 'caldo_pollo', 'caldo_pescado', 'vinagre', 'miel', 'canela', 'levadura_quimica', 'salsa_soja', 'mostaza', 'cafe']);
+
+export interface GenerateOptions {
+  /** Comidas que se conservan tal cual (aceptadas, hechas…). Sus huecos no se rellenan. */
+  keep?: PlannedMeal[];
+  /** Solo se generan platos para estos días (por defecto, toda la semana). */
+  dates?: ISODate[];
+  /** Semilla distinta para obtener otra propuesta. */
+  seed?: string;
+  /** Recetas que se intentan evitar (p. ej. las que había antes de «Cambiar día»). */
+  avoid?: Set<string>;
 }
 
 /**
@@ -80,23 +110,29 @@ function recentUse(data: AppData, monday: ISODate): Map<string, number> {
  * Para cada día y comida puntúa todas las recetas compatibles con el perfil
  * (alergias, dieta, «no me gusta», tiempo de cocina) y elige la mejor:
  * - no repite receta en la misma semana (solo si no queda otra opción);
- * - penaliza las recetas usadas en las tres semanas anteriores (rotación);
- * - alterna la proteína principal entre comida y cena y entre días seguidos,
- *   procura pescado ~3 veces y legumbre ~2 veces por semana y limita la carne roja;
- * - prima los platos con verdura en comida y cena y evita cenas muy cargadas de hidratos;
+ * - evita las recetas de las 4 semanas anteriores (rotación) y puede recuperar las más antiguas;
+ * - no repite el ingrediente principal en comidas principales consecutivas (comida → cena → comida)
+ *   y alterna carnes, pescados, huevos y legumbres (≈3 pescado, ≈2 legumbre, carne roja limitada);
+ * - varía desayunos, meriendas y media mañana (no el mismo tipo dos días seguidos);
+ * - reparte los ingredientes para que la semana no gire en torno a los mismos alimentos;
+ * - evita que dos días tengan la misma combinación de proteínas en comida y cena;
+ * - prima los platos con verdura en comida y cena, cenas más ligeras y recetas rápidas entre semana;
  * - busca la energía objetivo de cada comida y ajusta la ración (0,75–1,5);
- * - favorece favoritas y recetas con alimentos que le gustan al usuario.
- * El resultado es estable para una misma semana y unos mismos datos.
+ * - favorece favoritas y alimentos que le gustan; penaliza las recetas que el usuario suele cambiar.
+ * El resultado es estable para una misma semana, unos mismos datos y una misma semilla.
  */
-export function generateWeek(data: AppData, monday: ISODate): PlannedMeal[] {
-  const rand = seeded(`${monday}|${data.profile.id}`);
+export function generateWeek(data: AppData, monday: ISODate, opts: GenerateOptions = {}): PlannedMeal[] {
+  const rand = seeded(`${monday}|${data.profile.id}|${opts.seed ?? ''}`);
   const slots = ALL_SLOTS.filter((s) => data.profile.mealSlots.includes(s));
   const shareTotal = slots.reduce((a, s) => a + SLOT_SHARE[s], 0) || 1;
   const kcalTarget = data.profile.targets?.kcal;
   const likes = data.profile.likes.map((l) => normalize(l)).filter(Boolean);
   const favs = new Set(data.favorites.recipes);
   const recent = recentUse(data, monday);
+  const older = olderUse(data, monday);
+  const notWanted = rejected(data, monday);
   const vegan = data.profile.dietType === 'vegana' || data.profile.dietType === 'vegetariana';
+  const recipeOf = (id: string | null | undefined) => (id ? allRecipes(data).find((r) => r.id === id) : undefined);
 
   const pools = new Map(slots.map((s) => [s, candidatesFor(data, s)]));
   const info = new Map<string, RecipeInfo>();
@@ -108,47 +144,95 @@ export function generateWeek(data: AppData, monday: ISODate): PlannedMeal[] {
 
   const usedWeek = new Map<string, number>();
   const mainCount = new Map<MainIngredient, number>();
+  const ingredientUse = new Map<string, number>();
   const out: PlannedMeal[] = [];
   const isMain = (s: MealSlot) => s === 'comida' || s === 'cena';
+  const register = (m: PlannedMeal) => {
+    out.push(m);
+    const r = recipeOf(m.recipeId);
+    if (!r) return;
+    usedWeek.set(r.id, (usedWeek.get(r.id) ?? 0) + 1);
+    if (isMain(m.slot)) mainCount.set(r.main, (mainCount.get(r.main) ?? 0) + 1);
+    for (const i of r.ingredients) if (!PANTRY.has(i.foodId) && i.amount >= 25) ingredientUse.set(i.foodId, (ingredientUse.get(i.foodId) ?? 0) + 1);
+  };
+  const keep = opts.keep ?? [];
+  keep.forEach(register);
+  const kept = new Set(keep.map((m) => `${m.date}|${m.slot}`));
+  const onlyDates = opts.dates ? new Set(opts.dates) : null;
+  const ordered = (a: PlannedMeal, b: PlannedMeal) => a.date.localeCompare(b.date) || ALL_SLOTS.indexOf(a.slot) - ALL_SLOTS.indexOf(b.slot);
+  /** última comida principal anterior a (fecha, franja) */
+  const previousMain = (date: ISODate, slot: MealSlot) =>
+    [...out].filter((m) => isMain(m.slot) && (m.date < date || (m.date === date && ALL_SLOTS.indexOf(m.slot) < ALL_SLOTS.indexOf(slot)))).sort(ordered).pop();
+  const nextMain = (date: ISODate, slot: MealSlot) =>
+    [...out].filter((m) => isMain(m.slot) && (m.date > date || (m.date === date && ALL_SLOTS.indexOf(m.slot) > ALL_SLOTS.indexOf(slot)))).sort(ordered)[0];
 
   weekDates(monday).forEach((date, dayIdx) => {
-    const yesterday = dayIdx > 0 ? addDays(date, -1) : null;
+    if (onlyDates && !onlyDates.has(date)) return;
+    const weekend = dayIdx >= 5;
+    const yesterday = addDays(date, -1);
     for (const slot of slots) {
+      if (kept.has(`${date}|${slot}`)) continue;
       const pool = pools.get(slot) ?? [];
       if (!pool.length) continue;
       const target = kcalTarget ? (kcalTarget * SLOT_SHARE[slot]) / shareTotal : null;
-      const todayMains = out.filter((m) => m.date === date && isMain(m.slot)).map((m) => m.recipeId);
-      const todayMainKinds = todayMains.map((id) => pool.find((r) => r.id === id)?.main ?? allRecipes(data).find((r) => r.id === id)?.main);
-      const yesterdaySame = yesterday ? out.find((m) => m.date === yesterday && m.slot === slot)?.recipeId : null;
-      const yesterdayKind = yesterdaySame ? allRecipes(data).find((r) => r.id === yesterdaySame)?.main : null;
       const todayIds = new Set(out.filter((m) => m.date === date).map((m) => m.recipeId));
+      const yKind = recipeOf(out.find((m) => m.date === yesterday && m.slot === slot)?.recipeId)?.main;
+      const tomorrowKind = recipeOf(out.find((m) => m.date === addDays(date, 1) && m.slot === slot)?.recipeId)?.main;
+      const prevMainKind = isMain(slot) ? recipeOf(previousMain(date, slot)?.recipeId)?.main : undefined;
+      const nextMainKind = isMain(slot) ? recipeOf(nextMain(date, slot)?.recipeId)?.main : undefined;
+      // combinaciones comida/cena de otros días (para que no haya dos días casi iguales)
+      const otherMain = isMain(slot) ? recipeOf(out.find((m) => m.date === date && isMain(m.slot) && m.slot !== slot)?.recipeId)?.main : undefined;
+      const dayPairs = new Set<string>();
+      if (otherMain) {
+        for (const d of weekDates(monday)) {
+          if (d === date) continue;
+          const kinds = out.filter((m) => m.date === d && isMain(m.slot)).map((m) => recipeOf(m.recipeId)?.main).filter(Boolean).sort();
+          if (kinds.length === 2) dayPairs.add(kinds.join('|'));
+        }
+      }
 
       let best: { r: Recipe; score: number } | null = null;
       for (const r of pool) {
         const inf = getInfo(r);
-        let score = rand() * 12;
+        let score = rand() * 10;
         // sin repeticiones en la semana ni el mismo día
         score -= (usedWeek.get(r.id) ?? 0) * 120;
         if (todayIds.has(r.id)) score -= 200;
-        // rotación con semanas anteriores
-        score -= (recent.get(r.id) ?? 0) * 9;
+        // rotación de 4 semanas y recuperación de recetas antiguas
+        score -= (recent.get(r.id) ?? 0) * 12;
+        if (!recent.has(r.id) && older.has(r.id)) score += 2;
+        if (notWanted.has(r.id)) score -= 8;
+        if (opts.avoid?.has(r.id)) score -= 60;
         // categoría propia de la franja (un postre no sustituye a una merienda salvo que encaje)
         if (r.category === 'postre') score -= 10;
         if (slot === 'cena' && r.category === 'cena') score += 4;
         if (slot === 'comida' && r.category === 'comida') score += 4;
+        // mismo tipo de plato que ayer o mañana en la misma franja
+        if (yKind === r.main) score -= isMain(slot) ? 14 : 10;
+        if (tomorrowKind === r.main) score -= isMain(slot) ? 10 : 6;
+        // variedad de ingredientes en la semana
+        let overlap = 0;
+        for (const i of r.ingredients) if (!PANTRY.has(i.foodId) && i.amount >= 25) overlap += ingredientUse.get(i.foodId) ?? 0;
+        score -= Math.min(overlap, 12) * 1.2;
         if (isMain(slot)) {
-          if (todayMainKinds.includes(r.main)) score -= 30;
-          if (yesterdayKind === r.main) score -= 14;
+          if (prevMainKind === r.main) score -= 30; // comidas principales consecutivas
+          if (nextMainKind === r.main) score -= 20;
+          if (otherMain && dayPairs.has([otherMain, r.main].sort().join('|'))) score -= 12;
           score -= (mainCount.get(r.main) ?? 0) * 7;
           const fish = [...FISH].reduce((a, k) => a + (mainCount.get(k) ?? 0), 0);
           const legumes = mainCount.get('legumbre') ?? 0;
+          const eggs = mainCount.get('huevo') ?? 0;
           const red = [...RED_MEAT].reduce((a, k) => a + (mainCount.get(k) ?? 0), 0);
           if (FISH.has(r.main) && fish < 3) score += 9;
           if (r.main === 'legumbre' && legumes < 2) score += 9;
+          if (r.main === 'huevo' && eggs < 2) score += 3;
           if (RED_MEAT.has(r.main) && red >= 3) score -= 18;
           if (!vegan && !ANIMAL_MAIN.has(r.main) && r.main !== 'legumbre' && r.main !== 'huevo') score -= 3;
           score += Math.min(inf.veg, 250) / 25; // hasta +10 por verdura
           if (slot === 'cena' && r.tags.includes('ligera')) score += 3;
+          // entre semana, mejor recetas que no lleven toda la tarde
+          if (!weekend && r.minutes > 45 && !r.tags.includes('batch')) score -= 4;
+          if (weekend && r.difficulty === 'elaborada') score += 2;
         }
         if (target && inf.kcal > 0) {
           const ratio = inf.kcal / target;
@@ -161,45 +245,177 @@ export function generateWeek(data: AppData, monday: ISODate): PlannedMeal[] {
       }
       if (!best) continue;
       const r = best.r;
-      usedWeek.set(r.id, (usedWeek.get(r.id) ?? 0) + 1);
-      if (isMain(slot)) mainCount.set(r.main, (mainCount.get(r.main) ?? 0) + 1);
       let portion = 1;
       const kcal = getInfo(r).kcal;
       if (target && kcal > 0) portion = Math.min(1.5, Math.max(0.75, Math.round((target / kcal) * 4) / 4));
-      out.push({ id: uid('pm'), date, slot, recipeId: r.id, portion, status: 'pendiente' });
+      register({ id: uid('pm'), date, slot, recipeId: r.id, portion, status: 'pendiente' });
     }
   });
+  return out.filter((m) => !keep.includes(m)).concat(keep).sort(ordered);
+}
+
+/** Platos que se conservan al regenerar: hechos, omitidos, aceptados o de días pasados. */
+function keepOnRegenerate(m: PlannedMeal, fromDate: ISODate) {
+  return m.date < fromDate || m.status !== 'pendiente' || !!m.accepted;
+}
+
+/**
+ * Nueva propuesta para la semana: cambia SOLO los platos pendientes y no aceptados
+ * desde `fromDate`. Devuelve cuántos platos han cambiado.
+ */
+export function regenerateWeek(data: AppData, monday: ISODate, fromDate: ISODate, seed: string): number {
+  const week = data.plan[monday] ?? [];
+  const keep = week.filter((m) => keepOnRegenerate(m, fromDate));
+  const before = new Map(week.map((m) => [`${m.date}|${m.slot}`, m.recipeId]));
+  const fresh = generateWeek(data, monday, { keep, seed, dates: weekDates(monday).filter((d) => d >= fromDate) });
+  data.plan[monday] = fresh;
+  let changed = 0;
+  for (const m of fresh) {
+    if (keep.includes(m)) continue;
+    const prev = before.get(`${m.date}|${m.slot}`);
+    if (prev !== m.recipeId) {
+      changed++;
+      logReplacement(data, { date: m.date, slot: m.slot, fromRecipeId: prev ?? null, toRecipeId: m.recipeId, source: 'regenerar' });
+    }
+  }
+  return changed;
+}
+
+/**
+ * Cambia un día entero: nuevos platos para todas las comidas PENDIENTES de ese día
+ * (las hechas u omitidas se conservan). El resto de la semana no se toca.
+ */
+export function regenerateDay(data: AppData, date: ISODate, seed: string): number {
+  const monday = startOfWeekLocal(date);
+  const week = data.plan[monday] ?? [];
+  const keep = week.filter((m) => m.date !== date || m.status !== 'pendiente');
+  const before = week.filter((m) => m.date === date && m.status === 'pendiente');
+  const avoid = new Set(before.map((m) => m.recipeId).filter((x): x is string => !!x));
+  data.plan[monday] = generateWeek(data, monday, { keep, dates: [date], seed, avoid });
+  let changed = 0;
+  for (const m of data.plan[monday].filter((x) => x.date === date && !keep.includes(x))) {
+    const prev = before.find((b) => b.slot === m.slot);
+    if (prev?.recipeId === m.recipeId) continue;
+    changed++;
+    logReplacement(data, { date, slot: m.slot, fromRecipeId: prev?.recipeId ?? null, toRecipeId: m.recipeId, source: 'dia' });
+  }
+  return changed;
+}
+
+/** Marca como aceptados todos los platos pendientes de la semana (no se cambiarán al regenerar). */
+export function acceptWeek(data: AppData, monday: ISODate): number {
+  let n = 0;
+  for (const m of data.plan[monday] ?? []) if (!m.accepted && m.status === 'pendiente') { m.accepted = true; n++; }
+  return n;
+}
+
+/** Registra una sustitución de plato (historial meal_replacements, máximo 300 entradas). */
+export function logReplacement(data: AppData, r: Omit<MealReplacement, 'id' | 'at'>) {
+  data.replacements ??= [];
+  data.replacements.push({ ...r, id: uid('rep'), at: new Date().toISOString() });
+  if (data.replacements.length > 300) data.replacements.splice(0, data.replacements.length - 300);
+}
+
+export interface PlanDiagnostics {
+  /** recetas compatibles por franja */
+  pool: Partial<Record<MealSlot, number>>;
+  repeatsInWeek: number;
+  repeatsFromLast4Weeks: number;
+  consecutiveSameMain: number;
+  notes: string[];
+}
+
+/** Revisión del menú de una semana: indica qué reglas no se han podido cumplir y por qué. */
+export function planDiagnostics(data: AppData, monday: ISODate): PlanDiagnostics {
+  const meals = (data.plan[monday] ?? []).filter((m) => data.profile.mealSlots.includes(m.slot) && m.recipeId);
+  const slots = ALL_SLOTS.filter((s) => data.profile.mealSlots.includes(s));
+  const pool: Partial<Record<MealSlot, number>> = {};
+  for (const s of slots) pool[s] = candidatesFor(data, s).length;
+  const ids = meals.map((m) => m.recipeId!);
+  const repeatsInWeek = ids.length - new Set(ids).size;
+  const recent = recentUse(data, monday);
+  const repeatsFromLast4Weeks = new Set(ids.filter((id) => recent.has(id))).size;
+  const mains = meals
+    .filter((m) => m.slot === 'comida' || m.slot === 'cena')
+    .sort((a, b) => a.date.localeCompare(b.date) || ALL_SLOTS.indexOf(a.slot) - ALL_SLOTS.indexOf(b.slot))
+    .map((m) => getRecipeMain(data, m.recipeId!));
+  let consecutiveSameMain = 0;
+  for (let i = 1; i < mains.length; i++) if (mains[i] && mains[i] === mains[i - 1]) consecutiveSameMain++;
+  const notes: string[] = [];
+  const small = slots.filter((s) => (pool[s] ?? 0) < 14);
+  if (small.length)
+    notes.push(
+      `Con tus preferencias hay pocas recetas para ${small.map((s) => `${SLOT_LABEL[s]} (${pool[s]})`).join(', ')}: puede que se repitan antes de 4 semanas. Se han priorizado tus alergias, intolerancias y preferencias.`,
+    );
+  if (repeatsInWeek > 0) notes.push(`${repeatsInWeek} plato(s) se repiten esta semana porque no había más opciones compatibles.`);
+  if (repeatsFromLast4Weeks > 0 && !small.length) notes.push(`${repeatsFromLast4Weeks} receta(s) ya aparecieron en las últimas 4 semanas.`);
+  if (data.profile.cookingTime && slots.some((s) => candidatesFor(data, s).every((r) => r.minutes > data.profile.cookingTime!)))
+    notes.push(`Algunas comidas superan tus ${data.profile.cookingTime} minutos porque no hay suficientes recetas más rápidas compatibles.`);
+  return { pool, repeatsInWeek, repeatsFromLast4Weeks, consecutiveSameMain, notes };
+}
+
+const SLOT_LABEL: Record<MealSlot, string> = { desayuno: 'desayunos', mediamanana: 'media mañana', comida: 'comidas', merienda: 'meriendas', cena: 'cenas' };
+function getRecipeMain(data: AppData, id: string): MainIngredient | undefined {
+  return allRecipes(data).find((r) => r.id === id)?.main;
+}
+
+/** Recetas usadas en el plan entre dos fechas (incluidas). */
+function usedBetween(data: AppData, from: ISODate, to: ISODate): Set<string> {
+  const out = new Set<string>();
+  for (const week of Object.values(data.plan)) for (const m of week) if (m.recipeId && m.date >= from && m.date <= to) out.add(m.recipeId);
   return out;
 }
 
-/** Receta al azar para «Sorpréndeme»: compatible con el perfil y distinta de las usadas recientemente. */
-export function surpriseRecipe(data: AppData, meal: PlannedMeal, opts: { anySlot?: boolean; exclude?: Set<string> } = {}): Recipe | null {
-  const pool = (opts.anySlot
-    ? allRecipes(data).filter((r) => !r.custom && recipeFit(data, r, data.profile).ok)
-    : candidatesFor(data, meal.slot)
-  ).filter((r) => r.id !== meal.recipeId && !opts.exclude?.has(r.id));
+/**
+ * «Sorpréndeme»: una receta compatible con el perfil que no se haya usado en las
+ * últimas 4 semanas (ni esté prevista en los próximos 7 días). Si no queda ninguna,
+ * la menos reciente. Favorece ligeramente favoritas y alimentos que le gustan.
+ */
+export function surprise(
+  data: AppData,
+  opts: { slot?: MealSlot; category?: Recipe['category']; date?: ISODate; exclude?: Set<string>; maxMinutes?: number } = {},
+): Recipe | null {
+  const base = opts.slot ? candidatesFor(data, opts.slot) : allRecipes(data).filter((r) => !r.custom && recipeFit(data, r, data.profile).ok);
+  let pool = base.filter((r) => (!opts.category || r.category === opts.category) && !opts.exclude?.has(r.id));
+  if (opts.maxMinutes) {
+    const quick = pool.filter((r) => r.minutes <= opts.maxMinutes!);
+    if (quick.length) pool = quick;
+  }
   if (!pool.length) return null;
-  // recetas usadas en los últimos 14 días alrededor de esta comida
-  const recent = new Set<string>();
-  const from = addDays(meal.date, -14);
-  const to = addDays(meal.date, 7);
-  for (const week of Object.values(data.plan)) for (const m of week) if (m.recipeId && m.date >= from && m.date <= to) recent.add(m.recipeId);
+  const date = opts.date ?? new Date().toISOString().slice(0, 10);
+  const recent = usedBetween(data, addDays(date, -7 * ROTATION_WEEKS), addDays(date, 7));
   const fresh = pool.filter((r) => !recent.has(r.id));
   const list = fresh.length ? fresh : pool;
-  return list[Math.floor(Math.random() * list.length)];
+  const favs = new Set(data.favorites.recipes);
+  const likes = data.profile.likes.map((l) => normalize(l)).filter(Boolean);
+  const weights = list.map((r) => 1 + (favs.has(r.id) ? 1 : 0) + (likes.length && infoOf(data, r, likes).liked ? 1 : 0));
+  let x = Math.random() * weights.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < list.length; i++) if ((x -= weights[i]) <= 0) return list[i];
+  return list[list.length - 1];
+}
+
+/** Sorpresa para una comida concreta del plan (no la cambia: solo la propone). */
+export function surpriseRecipe(data: AppData, meal: PlannedMeal, opts: { anySlot?: boolean; exclude?: Set<string> } = {}): Recipe | null {
+  const exclude = new Set(opts.exclude);
+  if (meal.recipeId) exclude.add(meal.recipeId);
+  return surprise(data, { slot: opts.anySlot ? undefined : meal.slot, date: meal.date, exclude });
 }
 
 /**
  * Vuelve a generar los platos PENDIENTES desde `fromDate` en adelante (semanas ya creadas),
- * respetando las preferencias actuales. Lo hecho u omitido no se toca.
+ * respetando las preferencias actuales. Lo hecho u omitido no se toca; lo aceptado se conserva
+ * salvo que ya no encaje con el perfil (p. ej. una alergia nueva).
  */
 export function regenerateFrom(data: AppData, fromDate: ISODate): void {
   for (const monday of Object.keys(data.plan)) {
     if (monday < startOfWeekLocal(fromDate)) continue;
-    const fresh = generateWeek(data, monday);
-    const kept = data.plan[monday].filter((m) => m.date < fromDate || m.status !== 'pendiente');
-    const keptKeys = new Set(kept.map((m) => `${m.date}|${m.slot}`));
-    data.plan[monday] = [...kept, ...fresh.filter((m) => m.date >= fromDate && !keptKeys.has(`${m.date}|${m.slot}`))];
+    const keep = data.plan[monday].filter((m) => {
+      if (m.date < fromDate || m.status !== 'pendiente') return true;
+      if (!m.accepted) return false;
+      const r = getRecipe(data, m.recipeId);
+      return !r || r.custom || recipeFit(data, r, data.profile).ok;
+    });
+    data.plan[monday] = generateWeek(data, monday, { keep, dates: weekDates(monday).filter((d) => d >= fromDate) });
   }
 }
 

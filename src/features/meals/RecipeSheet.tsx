@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeftRight, Check, ChevronDown, Clock, Heart, Info, RotateCcw, Trash2, Users } from 'lucide-react';
+import { ArrowLeftRight, CalendarPlus, Check, ChevronDown, Clock, Heart, Info, RotateCcw, Trash2, Users } from 'lucide-react';
 import type { PlannedMeal, Recipe } from '../../types';
 import { Sheet } from '../../components/ui/Sheet';
 import { Badge, Button, IconButton, Stepper, cx } from '../../components/ui/primitives';
@@ -10,7 +10,7 @@ import { equivalencesFor } from '../../services/equivalences';
 import { ALLERGEN_LABELS } from '../../data/foods';
 import { n0, n1 } from '../../lib/format';
 import { MacroGrid, RecipeCover } from './RecipeBits';
-import { CATEGORY_META, DIET_LABEL, DIFFICULTY_LABEL, MAIN_LABEL, QUALITY_TEXT, TAG_LABEL, dietLabels, nutritionQuality } from '../../services/recipeMeta';
+import { CATEGORY_META, CUISINE_LABEL, DIET_LABEL, DIFFICULTY_LABEL, MAIN_LABEL, QUALITY_TEXT, TAG_LABEL, dietLabels, ingredientsFiber, nutritionQuality, recipeTitle } from '../../services/recipeMeta';
 import { Segmented } from '../../components/ui/primitives';
 import { useMealActions } from './useMealActions';
 
@@ -20,9 +20,11 @@ interface Props {
   onClose: () => void;
   meal?: PlannedMeal;
   onSwap?: () => void;
+  /** Biblioteca: abre la elección de día y comida para añadir la receta al menú */
+  onAddToPlan?: () => void;
 }
 
-export function RecipeSheet({ recipe, open, onClose, meal, onSwap }: Props) {
+export function RecipeSheet({ recipe, open, onClose, meal, onSwap, onAddToPlan }: Props) {
   const data = useData();
   const { mutate } = useStore();
   const actions = useMealActions();
@@ -40,6 +42,7 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap }: Props) {
   const ingredients = rows.filter((i) => !i.removed);
   const { macros, missing } = ingredientsNutrition(data, ingredients, portion);
   const allergens = ingredientsAllergens(data, ingredients);
+  const fiber = ingredientsFiber(data, ingredients, portion);
   const inMeal = new Set(ingredients.map((i) => i.foodId));
   const fav = data.favorites.recipes.includes(recipe.id);
 
@@ -53,7 +56,7 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap }: Props) {
     <Sheet
       open={open}
       onClose={onClose}
-      title={recipe.name}
+      title={recipeTitle(recipe)}
       size="lg"
       subtitle={meal ? `${SLOT_META[meal.slot].label} · ${meal.status === 'hecha' ? 'Completada' : meal.status === 'omitida' ? 'Omitida' : 'Pendiente'}` : recipe.slots.map((s) => SLOT_META[s].label).join(' · ')}
       headerAction={
@@ -81,15 +84,20 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap }: Props) {
               {meal.status === 'hecha' ? 'Pendiente' : 'Marcar hecha'}
             </Button>
           </div>
+        ) : onAddToPlan ? (
+          <Button className="w-full" icon={<CalendarPlus size={18} />} onClick={onAddToPlan} data-add-to-plan>
+            Añadir al menú
+          </Button>
         ) : undefined
       }
     >
-      <RecipeCover recipe={recipe} size="full" className="mb-4 h-40 w-full" rounded="rounded-[18px]" />
+      <RecipeCover recipe={recipe} size="full" className="mb-3 h-40 w-full" rounded="rounded-[18px]" labelled />
+      {recipe.title && <p className="mb-3 text-[16px] leading-snug text-ink2" data-recipe-description>{recipe.name}</p>}
 
       <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-[14px] text-ink2">
         <span className="inline-flex items-center gap-1.5"><Clock size={16} /> {recipe.minutes} min</span>
         <span className="inline-flex items-center gap-1.5"><Users size={16} /> {meal ? (portion === 1 ? '1 ración' : `${n1(portion)} raciones`) : `Receta para ${recipe.servings} ${recipe.servings === 1 ? 'ración' : 'raciones'}`}</span>
-        <span>{CATEGORY_META[recipe.category].label} · {DIFFICULTY_LABEL[recipe.difficulty]} · {MAIN_LABEL[recipe.main]}</span>
+        <span>{CATEGORY_META[recipe.category].label} · {DIFFICULTY_LABEL[recipe.difficulty]} · {MAIN_LABEL[recipe.main]}{recipe.cuisine ? ` · Cocina ${CUISINE_LABEL[recipe.cuisine].toLowerCase()}` : ''}</span>
       </div>
       <div className="mb-4 flex flex-wrap gap-1.5" data-recipe-tags>
         {fav && <Badge tone="accent">Favorita</Badge>}
@@ -99,6 +107,9 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap }: Props) {
 
       <p className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-ink3">{meal && portion !== 1 ? `Para tu ración (×${n1(portion)})` : 'Por ración'}</p>
       <MacroGrid m={macros} />
+      <p className="tabular mt-2 text-[13px] text-ink2" data-fiber>
+        Fibra: <span className="font-semibold text-ink">≈ {n1(fiber.grams)} g</span> <span className="text-ink3">(estimada{fiber.complete ? '' : ', faltan datos de algún ingrediente'})</span>
+      </p>
       <p className="mt-2 flex items-start gap-1.5 text-[12px] leading-snug text-ink3" data-quality={nutritionQuality(data, ingredients)}>
         <Info size={14} className="mt-[1px] shrink-0" />
         <span>

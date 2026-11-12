@@ -1,5 +1,6 @@
 import type { Difficulty, MainIngredient, MealSlot, Recipe, RecipeCategory, RecipeTag } from '../../types';
 import { BASE_FOODS } from '../foods';
+import { CUISINE_CODES, EXISTING_TITLES, type CuisineCode } from './titles';
 
 /**
  * Biblioteca de recetas: datos separados de la interfaz y de los menús del usuario.
@@ -24,6 +25,20 @@ const DIFF: Record<string, Difficulty> = { f: 'facil', m: 'media', e: 'elaborada
 
 const foodIds = new Set(BASE_FOODS.map((f) => f.id));
 const foodById = new Map(BASE_FOODS.map((f) => [f.id, f]));
+
+/**
+ * Fila de las recetas nuevas (v3), con nombre comercial y cocina:
+ * [id, título comercial, nombre descriptivo, cocina, franjas, minutos, dificultad, raciones, etiquetas, ingredientes, pasos, principal?]
+ */
+export type TRow = [string, string, string, CuisineCode, string, number, 'f' | 'm' | 'e', number, string, string, string[], MainIngredient?];
+
+export function titled(category: RecipeCategory, list: TRow[]): RecipeDraft[] {
+  return list.map(([id, title, name, cuisine, ...rest]) => {
+    const [d] = rows(category, [[id, name, ...rest] as Row]);
+    if (!CUISINE_CODES[cuisine]) throw new Error(`Receta ${id}: cocina desconocida ${cuisine}`);
+    return { ...d, title, cuisine: CUISINE_CODES[cuisine] };
+  });
+}
 
 export function rows(category: RecipeCategory, list: Row[]): RecipeDraft[] {
   return list.map(([id, name, slots, minutes, dif, servings, tags, ings, steps, main]) => {
@@ -61,8 +76,9 @@ const MAIN_OF: Record<string, MainIngredient> = {
   pavo: 'pavo', pavo_fiambre: 'pavo',
   ternera: 'ternera', ternera_picada: 'ternera',
   lomo_cerdo: 'cerdo', solomillo_cerdo: 'cerdo', jamon_serrano: 'cerdo', jamon_cocido: 'cerdo',
-  merluza: 'pescado_blanco', bacalao: 'pescado_blanco', lubina: 'pescado_blanco', dorada: 'pescado_blanco',
-  salmon: 'pescado_azul', sardinas: 'pescado_azul', caballa: 'pescado_azul', salmon_ahumado: 'pescado_azul',
+  merluza: 'pescado_blanco', bacalao: 'pescado_blanco', lubina: 'pescado_blanco', dorada: 'pescado_blanco', rape: 'pescado_blanco',
+  salmon: 'pescado_azul', sardinas: 'pescado_azul', caballa: 'pescado_azul', salmon_ahumado: 'pescado_azul', boquerones: 'pescado_azul', trucha: 'pescado_azul', emperador: 'pescado_azul',
+  pulpo: 'marisco', almejas: 'marisco', queso_untar: 'lacteo', harina_garbanzo: 'legumbre', habas: 'legumbre', tofu_sedoso: 'proteina_vegetal',
   atun: 'atun', atun_fresco: 'atun',
   langostinos: 'marisco', gambas: 'marisco', mejillones: 'marisco', calamar: 'marisco', sepia: 'marisco',
   huevo: 'huevo', claras: 'huevo',
@@ -84,7 +100,7 @@ function deriveMain(r: RecipeDraft): MainIngredient {
   if (best && best.p >= 5) return best.m;
   // sin proteína destacada: fruta, cereal o verdura según el peso dominante
   const weight = (pred: (id: string) => boolean) => r.ingredients.filter((i) => pred(i.foodId)).reduce((a, i) => a + i.amount, 0);
-  const fruitIds = new Set(['platano', 'manzana', 'pera', 'naranja', 'mandarina', 'kiwi', 'fresas', 'frutos_rojos', 'frambuesas', 'melocoton', 'mango', 'pina', 'uvas', 'melon', 'sandia', 'cerezas', 'ciruela', 'caqui', 'higos', 'granada', 'datiles', 'pasas']);
+  const fruitIds = new Set(['platano', 'manzana', 'pera', 'naranja', 'mandarina', 'kiwi', 'fresas', 'frutos_rojos', 'frambuesas', 'melocoton', 'mango', 'pina', 'uvas', 'melon', 'sandia', 'cerezas', 'ciruela', 'caqui', 'higos', 'granada', 'datiles', 'pasas', 'albaricoque', 'orejones', 'lima']);
   const fruit = weight((id) => fruitIds.has(id));
   const cereal = weight((id) => foodById.get(id)?.category === 'cereales');
   const veg = weight((id) => foodById.get(id)?.category === 'verduras' && !fruitIds.has(id));
@@ -123,6 +139,9 @@ function hash(s: string): number {
 }
 
 export function finalize(d: RecipeDraft): Recipe {
+  const legacy = EXISTING_TITLES[d.id];
+  if (legacy) d = { ...d, title: d.title ?? legacy[0], cuisine: d.cuisine ?? CUISINE_CODES[legacy[1]] };
+  if (!d.title) throw new Error(`Receta ${d.id}: falta el nombre comercial`);
   const main = d.main ?? deriveMain(d);
   const category: RecipeCategory = d.category ?? (d.slots[0] === 'merienda' ? 'merienda' : d.slots[0]);
   const difficulty: Difficulty = d.difficulty ?? (d.minutes <= 15 ? 'facil' : d.minutes <= 40 ? 'media' : 'elaborada');

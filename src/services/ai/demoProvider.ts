@@ -1,3 +1,4 @@
+import { recipeTitle } from '../recipeMeta';
 import type { AppData, Food } from '../../types';
 import { addDays, startOfWeek, todayISO, weekDates } from '../../lib/dates';
 import { n0, normalize } from '../../lib/format';
@@ -58,7 +59,7 @@ function answer(text: string, data: AppData): string {
         : 'tu catálogo de recetas compatibles (no has marcado productos comprados ni has nombrado ingredientes)';
     return [
       `Según ${basis}, estas cenas encajan con tus preferencias:`,
-      ...ranked.map(({ r, have }) => `- **${r.name}** · ${n0(recipeNutrition(data, r).macros.kcal)} kcal · ${r.minutes} min · tienes ${have} de ${r.ingredients.length} ingredientes`),
+      ...ranked.map(({ r, have }) => `- **${recipeTitle(r)}** (${r.name.toLowerCase()}) · ${n0(recipeNutrition(data, r).macros.kcal)} kcal · ${r.minutes} min · tienes ${have} de ${r.ingredients.length} ingredientes`),
       '',
       'Puedes cambiar la cena de hoy desde Hoy › Cena › Cambiar plato.',
     ].join('\n');
@@ -77,7 +78,7 @@ function answer(text: string, data: AppData): string {
     if (next) {
       const alt = findAlternatives(data, next, 1).alternatives[0];
       const cur = getRecipe(data, next.recipeId);
-      if (alt && cur) lines.push('', `Por ejemplo, para tu ${SLOT_META[next.slot].label.toLowerCase()} de hoy (${cur.name}), la primera alternativa sería **${alt.recipe.name}** (${n0(alt.macros.kcal)} kcal${alt.reasons.length ? `; ${alt.reasons.join(', ').toLowerCase()}` : ''}).`);
+      if (alt && cur) lines.push('', `Por ejemplo, para tu ${SLOT_META[next.slot].label.toLowerCase()} de hoy (${recipeTitle(cur)}), la primera alternativa sería **${recipeTitle(alt.recipe)}** (${n0(alt.macros.kcal)} kcal${alt.reasons.length ? `; ${alt.reasons.join(', ').toLowerCase()}` : ''}).`);
     }
     lines.push('', 'Nada se cambia hasta que confirmas.');
     return lines.join('\n');
@@ -157,8 +158,8 @@ function answer(text: string, data: AppData): string {
     return [
       'Algunas ideas para organizarte con poco tiempo:',
       '- **Cocina por tandas:** dedica 1 hora el domingo a preparar bases (legumbre, cereal, verdura asada) y combínalas entre semana.',
-      batch.length ? `- Recetas que aguantan bien: ${batch.map((r) => r.name).join(', ')}.` : '',
-      quick.length ? `- Comidas o cenas en 15 minutos o menos: ${quick.map((r) => r.name).join(', ')}.` : '',
+      batch.length ? `- Recetas que aguantan bien: ${batch.map((r) => recipeTitle(r)).join(', ')}.` : '',
+      quick.length ? `- Comidas o cenas en 15 minutos o menos: ${quick.map((r) => recipeTitle(r)).join(', ')}.` : '',
       '- Ajusta en Perfil el tiempo máximo de cocina: el plan y las sustituciones lo tendrán en cuenta.',
       '- Usa la lista de la compra en modo tienda para hacer una sola compra semanal.',
     ].filter(Boolean).join('\n');
