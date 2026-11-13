@@ -1,19 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Camera, ChevronDown, ChevronLeft, Globe, ImageOff, Plus, RefreshCw, RotateCw, Search, Trash2 } from 'lucide-react';
+import { AlertTriangle, Camera, ChevronDown, ChevronLeft, ImageOff, Minus, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 import type { Food, QtyUnit, Recipe } from '../../types';
 import { Sheet } from '../../components/ui/Sheet';
 import { Button, Chip, IconButton, Stepper, TextField, cx } from '../../components/ui/primitives';
 import { useFeedback } from '../../components/ui/Feedback';
 import { useData, useStore } from '../../store/AppStore';
+import { getFood } from '../../services/catalog';
+import { nextQty } from '../meals/QuantityEditor';
 import { todayISO } from '../../lib/dates';
 import { n0, n1, parseDecimal, uid } from '../../lib/format';
-import { getFood } from '../../services/catalog';
 import {
   allowedUnits, compressPhoto, defaultQuantity, dishNutrition, DISH_CATEGORIES, draftFromRecipe, emptyDraft, saveDish, toBaseAmount, UNIT_LABEL, unitSize, validateDraft, type DishDraft,
 } from '../../services/dishes';
 import { QUALITY_TEXT } from '../../services/recipeMeta';
-import { FoodRow, FoodSourcesNote, KindFilter } from '../log/LogFoodSheet';
-import type { FoodKind } from '../../services/foodSearch';
+import { FoodRow, FoodSourcesNote } from '../log/LogFoodSheet';
 import { CustomFoodForm } from '../log/CustomFoodForm';
 import { useFoodSearch } from '../log/useFoodSearch';
 
@@ -68,7 +68,6 @@ export function DishEditor({ open, onClose, recipe, onSaved, initialName }: {
   };
 
   const pickFood = (food: Food) => {
-    if (food.source === 'openfoodfacts' && !getFood(data, food.id)) mutate((d) => void d.customFoods.push(food));
     if (replacing !== null) {
       // sustituir: se conserva la cantidad si la unidad sigue siendo válida para el nuevo alimento
       const old = draft.items[replacing];
@@ -90,7 +89,24 @@ export function DishEditor({ open, onClose, recipe, onSaved, initialName }: {
     const v = parseDecimal(text);
     setDraft((d) => ({ ...d, items: d.items.map((x, i) => (i === idx ? { ...x, quantity: Number.isFinite(v) ? v : 0 } : x)) }));
   };
-  const setUnit = (idx: number, unit: QtyUnit) => setDraft((d) => ({ ...d, items: d.items.map((x, i) => (i === idx ? { ...x, unit } : x)) }));
+  /** Cambiar de unidad conserva la cantidad real: 2 kiwis → 150 g (si hay equivalencia en la base). */
+  const setUnit = (idx: number, unit: QtyUnit) => {
+    const it = draft.items[idx];
+    const food = it && getFood(data, it.foodId);
+    const base = food ? toBaseAmount(food, it.quantity, it.unit) : null;
+    const per = food ? toBaseAmount(food, 1, unit) : null;
+    const q = base !== null && per ? Math.round((base / per) * 100) / 100 : it?.quantity ?? 0;
+    setDraft((d) => ({ ...d, items: d.items.map((x, i) => (i === idx ? { ...x, unit, quantity: q } : x)) }));
+    setQtyText((t) => t.map((x, i) => (i === idx ? fmt(q) : x)));
+  };
+  /** − / +: los mismos pasos que en el registro (ver nextQty). */
+  const bump = (idx: number, dir: 1 | -1) => {
+    const it = draft.items[idx];
+    if (!it) return;
+    const next = nextQty(it.quantity > 0 ? it.quantity : 0, it.unit, dir);
+    if (next === null) return;
+    setQty(idx, fmt(next));
+  };
   const remove = (idx: number) => {
     setDraft((d) => ({ ...d, items: d.items.filter((_, i) => i !== idx) }));
     setQtyText((t) => t.filter((_, i) => i !== idx));
@@ -199,23 +215,29 @@ export function DishEditor({ open, onClose, recipe, onSaved, initialName }: {
                         </IconButton>
                       </div>
                       <div className="mt-1.5 flex items-center gap-2">
-                        <label className={cx('flex h-11 w-[96px] items-center rounded-[10px] bg-surface px-2.5 ring-1', bad ? 'ring-warn' : 'ring-line/70', 'focus-within:ring-2 focus-within:ring-accent')}>
+                        <IconButton label={`Menos ${food?.name ?? ''}`} onClick={() => bump(idx, -1)} onPointerDown={(e) => e.preventDefault()} className="!w-9 bg-surface ring-1 ring-line/70" data-qty-minus>
+                          <Minus size={16} />
+                        </IconButton>
+                        <label className={cx('flex h-11 w-[72px] items-center rounded-[10px] bg-surface px-2.5 ring-1', bad ? 'ring-warn' : 'ring-line/70', 'focus-within:ring-2 focus-within:ring-accent')}>
                           <span className="sr-only">Cantidad de {food?.name}</span>
                           <input
                             inputMode="decimal"
                             enterKeyHint="done"
                             value={qtyText[idx] ?? ''}
                             onChange={(e) => setQty(idx, e.target.value)}
-                            className="tabular w-full bg-transparent text-[17px] font-semibold focus:outline-none"
+                            className="tabular w-full bg-transparent text-center text-[17px] font-semibold focus:outline-none"
                             data-qty
                           />
                         </label>
+                        <IconButton label={`Más ${food?.name ?? ''}`} onClick={() => bump(idx, 1)} onPointerDown={(e) => e.preventDefault()} className="!w-9 bg-surface ring-1 ring-line/70" data-qty-plus>
+                          <Plus size={16} />
+                        </IconButton>
                         <label className="relative">
                           <span className="sr-only">Unidad</span>
                           <select
                             value={it.unit}
                             onChange={(e) => setUnit(idx, e.target.value as QtyUnit)}
-                            className="h-11 appearance-none rounded-[10px] bg-surface pl-3 pr-8 text-[15px] ring-1 ring-line/70"
+                            className="h-11 max-w-[128px] appearance-none rounded-[10px] bg-surface pl-3 pr-8 text-[15px] ring-1 ring-line/70"
                             data-unit
                           >
                             {units.map((x) => <option key={x} value={x}>{UNIT_LABEL[x].long}</option>)}
@@ -333,8 +355,7 @@ const fmt = (v: number) => String(Math.round(v * 100) / 100).replace('.', ',');
 function IngredientPicker({ onPick, onCreate, onBack }: { onPick: (f: Food) => void; onCreate: () => void; onBack: () => void }) {
   const data = useData();
   const [q, setQ] = useState('');
-  const [kind, setKind] = useState<FoodKind | 'todos'>('todos');
-  const { local: list, remote, remoteEnabled, retry } = useFoodSearch(data, q, true, kind);
+  const { local: list } = useFoodSearch(data, q);
   return (
     <div className="anim-fade">
       <div className="sticky top-0 z-10 -mx-5 bg-surface px-5 pb-3">
@@ -343,10 +364,9 @@ function IngredientPicker({ onPick, onCreate, onBack }: { onPick: (f: Food) => v
           <label className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-[12px] bg-surface2 px-3 focus-within:ring-2 focus-within:ring-accent">
             <Search size={18} className="text-ink3" aria-hidden="true" />
             <span className="sr-only">Buscar alimento</span>
-            <input data-autofocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Leche, queso, Hacendado…" className="h-full w-full bg-transparent text-[17px] placeholder:text-ink3 focus:outline-none" type="search" enterKeyHint="search" data-ingredient-search />
+            <input data-autofocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Leche, queso, pollo…" className="h-full w-full bg-transparent text-[17px] placeholder:text-ink3 focus:outline-none" type="search" enterKeyHint="search" data-ingredient-search />
           </label>
         </div>
-        <KindFilter value={kind} onChange={setKind} />
       </div>
       <button type="button" onClick={onCreate} className="press mb-2 flex w-full items-center gap-2 rounded-[14px] bg-surface2 px-3 py-3 text-left text-[14px] font-semibold">
         <Plus size={18} className="text-accent" /> ¿No está? Crea el alimento con sus valores por 100 g
@@ -357,19 +377,6 @@ function IngredientPicker({ onPick, onCreate, onBack }: { onPick: (f: Food) => v
         <ul className="divide-y divide-line/60" data-ingredient-results>
           {list.map((f) => <FoodRow key={f.id} food={f} onClick={() => onPick(f)} />)}
         </ul>
-      )}
-      {remoteEnabled && q.trim().length >= 3 && (
-        <div className="mt-5">
-          <p className="mb-1 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-ink3"><Globe size={14} /> Open Food Facts</p>
-          {remote.status === 'loading' && <p className="anim-shimmer py-4 text-[14px] text-ink2">Buscando productos…</p>}
-          {remote.status === 'error' && (
-            <div className="flex items-center justify-between gap-3 rounded-[14px] bg-warnSoft px-3 py-2.5 text-[14px] text-warn">
-              <span>{remote.error}</span>
-              <Button size="sm" variant="secondary" icon={<RotateCw size={15} />} onClick={retry}>Reintentar</Button>
-            </div>
-          )}
-          {remote.items.length > 0 && <ul className="divide-y divide-line/60">{remote.items.map((f) => <FoodRow key={f.id} food={f} onClick={() => onPick(f)} />)}</ul>}
-        </div>
       )}
       <FoodSourcesNote />
     </div>

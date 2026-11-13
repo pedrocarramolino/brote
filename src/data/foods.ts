@@ -290,8 +290,8 @@ const FIBER: Record<string, number> = {
 /** Valores por 100 g/ml que usaba la app antes de enlazar con BEDCA/USDA (solo para conservar el historial). */
 export const LEGACY_PER100: Record<string, Macros> = Object.fromEntries(rows.map(([id, , , kcal, protein, carbs, fat]) => [id, { kcal, protein, carbs, fat }]));
 
-/** Versión actual de la base de alimentos (2 = valores de BEDCA/USDA). */
-export const FOOD_DB_VERSION = 2;
+/** Versión actual de la base de alimentos (2 = valores de BEDCA/USDA; 3 = solo alimentos genéricos, sin marcas). */
+export const FOOD_DB_VERSION = 3;
 
 type OfficialRow = { id: string; n: string; u: 'g' | 'ml'; v: (number | null)[]; g: string; s: 'bedca' | 'usda'; r: number; a: Allergen[]; t: NonNullable<Food['tags']>; hidden?: boolean };
 const OFFICIAL_ROWS = OFFICIAL as unknown as OfficialRow[];
@@ -365,15 +365,70 @@ export const BASE_FOODS: Food[] = [
   }),
 ];
 
+/**
+ * Un solo alimento genérico por producto equivalente: las entradas repetidas entre BEDCA y USDA
+ * (mismo alimento con otro nombre) se agrupan en el genérico que usa la app. Los ids antiguos
+ * siguen resolviéndose al genérico (getFood), así ningún plato ni registro guardado se rompe.
+ * Las variedades con valores distintos (crudo/cocido, con/sin piel, entera/desnatada…) se conservan.
+ */
+export const GENERIC_ALIAS: Record<string, string> = {
+  u171269: 'leche_desnatada', // Leche desnatada (USDA) = Leche desnatada (BEDCA)
+  u170887: 'yogur_desnatado', // Yogur natural desnatado
+  u173709: 'atun', // Atún claro al natural, escurrido
+  u173708: 'atun_aceite', // Atún claro en aceite, escurrido
+  b2130: 'atun_aceite', // Atún en aceite de oliva (muestra de una marca)
+  b2173: 'b2170', // Pan tostado integral = Pan integral, tostado
+  u174218: 'b2471', // Pulpo crudo
+};
+
+/** Nombres genéricos (sin marcas ni «tipo X») para entradas del catálogo oficial. */
+const GENERIC_RENAME: Record<string, string> = {
+  b2521: 'Leche fermentada líquida (yogur bebible)',
+  b2170: 'Pan integral tostado',
+  b2471: 'Pulpo crudo',
+  b2520: 'Yogur griego cremoso',
+};
+
+/**
+ * Variedades que solo existían como productos de marca: se agrupan en un genérico con la
+ * mediana de las etiquetas de los productos equivalentes (Open Food Facts, ODbL). Valores por 100 ml:
+ * kcal, proteínas, hidratos, grasas, saturadas, azúcares, fibra, sal.
+ */
+const GROUPED_LABELS: { id: string; name: string; n: number; v: [number, number, number, number, number, number, number, number] }[] = [
+  { id: 'leche_entera_sin_lactosa', name: 'Leche entera sin lactosa', n: 2, v: [63.5, 3.1, 4.8, 3.6, 2.5, 4.8, 0, 0.1] },
+  { id: 'leche_semi_sin_lactosa', name: 'Leche semidesnatada sin lactosa', n: 5, v: [46, 3.2, 4.8, 1.6, 1.1, 4.8, 0, 0.1] },
+  { id: 'leche_desnatada_sin_lactosa', name: 'Leche desnatada sin lactosa', n: 5, v: [34, 3.2, 4.8, 0.2, 0.1, 4.8, 0, 0.1] },
+];
+BASE_FOODS.push(
+  ...GROUPED_LABELS.map((g): Food => ({
+    id: g.id,
+    name: g.name,
+    unit: 'ml',
+    per100: { kcal: g.v[0], protein: g.v[1], carbs: g.v[2], fat: g.v[3] },
+    sat: g.v[4],
+    sugars: g.v[5],
+    fiber: g.v[6],
+    salt: g.v[7],
+    category: 'lacteos',
+    // sin lactosa pero con proteína de leche: se mantiene el aviso de alérgeno
+    allergens: ['lactosa'],
+    source: 'openfoodfacts',
+    ref: `mediana de ${g.n} etiquetas`,
+    portion: { label: '1 vaso', amount: 250 },
+    tags: ['animal', 'lacteo'],
+    group: 'Lácteos',
+  })),
+);
+
 const usedRefs = new Set([...Object.values(CURATED.base), ...CURATED.added.map((c) => c.ref)].filter(Boolean));
 
 /**
  * Catálogo completo de alimentos genéricos de BEDCA y USDA (los que no están ya enlazados
  * a un alimento de la app, para no duplicarlos). Se buscan desde el creador de platos y el registro.
  */
-export const OFFICIAL_FOODS: Food[] = OFFICIAL_ROWS.filter((r) => !r.hidden && !usedRefs.has(r.id)).map((r) => ({
+export const OFFICIAL_FOODS: Food[] = OFFICIAL_ROWS.filter((r) => !r.hidden && !usedRefs.has(r.id) && !GENERIC_ALIAS[r.id]).map((r) => ({
   id: r.id,
-  name: r.n,
+  name: GENERIC_RENAME[r.id] ?? r.n,
   unit: r.u,
   category: SHOP_OF_GROUP[r.g] ?? 'otros',
   allergens: r.a,

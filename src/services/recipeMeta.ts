@@ -51,7 +51,7 @@ const OFFICIAL_SOURCES = new Set(['bedca', 'usda', 'openfoodfacts']);
 
 /**
  * Calidad del dato nutricional de un conjunto de ingredientes:
- * - verificado: todos los alimentos tienen datos de BEDCA, USDA o de la etiqueta del fabricante;
+ * - verificado: todos los alimentos tienen datos de BEDCA, USDA o la media de etiquetas de productos equivalentes;
  * - estimado: alguno usa un valor medio estimado o introducido por el usuario;
  * - pendiente: falta algún alimento en la base y su aporte no se suma.
  */
@@ -68,7 +68,7 @@ export function nutritionQuality(data: Pick<AppData, 'customFoods'>, ingredients
 /** Recuento de ingredientes por fuente («BEDCA 5 · USDA 2 · estimado 1»). */
 export function sourceSummary(data: Pick<AppData, 'customFoods'>, ingredients: { foodId: string }[]): string {
   const c: Record<string, number> = {};
-  const label: Record<string, string> = { bedca: 'BEDCA', usda: 'USDA', openfoodfacts: 'etiqueta', referencia: 'estimado', estimacion: 'estimado', usuario: 'tuyo' };
+  const label: Record<string, string> = { bedca: 'BEDCA', usda: 'USDA', openfoodfacts: 'media de etiquetas', referencia: 'estimado', estimacion: 'estimado', usuario: 'tuyo' };
   for (const i of ingredients) {
     const f = getFood(data, i.foodId);
     const k = f ? label[f.source] : 'sin datos';
@@ -80,7 +80,7 @@ export function sourceSummary(data: Pick<AppData, 'customFoods'>, ingredients: {
 export const QUALITY_TEXT: Record<DataQuality, { label: string; detail: string }> = {
   verificado: {
     label: 'Datos de fuentes oficiales',
-    detail: 'Calculado con las cantidades de cada ingrediente y sus valores por 100 g de BEDCA (AESAN), USDA FoodData Central o la etiqueta del fabricante.',
+    detail: 'Calculado con las cantidades de cada ingrediente y sus valores por 100 g de BEDCA (AESAN) y USDA FoodData Central (algunos genéricos, con la media de etiquetas de productos equivalentes).',
   },
   estimado: {
     label: 'Valor parcialmente estimado',

@@ -39,6 +39,8 @@ export interface EffectiveIngredient {
   replaces?: string;
   /** el usuario lo ha quitado de esta comida (solo con includeRemoved) */
   removed?: boolean;
+  /** cantidad por ración de la receta original cuando el usuario la ha cambiado en esta comida */
+  original?: number;
 }
 
 /**
@@ -54,6 +56,8 @@ export function mealIngredients(data: Pick<AppData, 'customRecipes'>, meal: Plan
     if (!s) return { foodId: i.foodId, amount: i.amount };
     // cantidad 0 = ingrediente quitado de esta comida
     if (s.amount <= 0) return { foodId: i.foodId, amount: i.amount, removed: true };
+    // mismo alimento con otra cantidad: ajuste de cantidad en esta comida (la receta no cambia)
+    if (s.foodId === i.foodId) return { foodId: i.foodId, amount: s.amount, original: i.amount };
     return { foodId: s.foodId, amount: s.amount, replaces: i.foodId };
   });
   return opts.includeRemoved ? rows : rows.filter((x) => !x.removed);

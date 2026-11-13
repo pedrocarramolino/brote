@@ -5,6 +5,7 @@ import { useFeedback } from '../../components/ui/Feedback';
 import { startOfWeek } from '../../lib/dates';
 import { uid } from '../../lib/format';
 import { getFood, getRecipe } from '../../services/catalog';
+import { addMacros, ingredientsNutrition, mealIngredients, scaleMacros, type EffectiveIngredient } from '../../services/nutrition';
 
 const foodPer100 = (d: AppData, foodId: string) => { const f = getFood(d, foodId); return f ? { ...f.per100 } : undefined; };
 import { logReplacement } from '../../services/planner';
@@ -16,6 +17,18 @@ function findMeal(d: AppData, id: string): PlannedMeal | undefined {
     if (m) return m;
   }
   return undefined;
+}
+
+/**
+ * Si la comida tenía sus valores congelados (hecha o pasada), se le aplica SOLO la diferencia
+ * del ingrediente cambiado: el resto conserva los valores con que se guardó.
+ */
+function adjustSnapshot(d: AppData, m: PlannedMeal, before: EffectiveIngredient[]) {
+  if (!m.snapshot) return;
+  const prev = ingredientsNutrition(d, before).macros;
+  const next = ingredientsNutrition(d, mealIngredients(d, m)).macros;
+  const p = addMacros(m.snapshot.perServing, addMacros(next, scaleMacros(prev, -1)));
+  m.snapshot = { ...m.snapshot, perServing: { kcal: Math.max(0, p.kcal), protein: Math.max(0, p.protein), carbs: Math.max(0, p.carbs), fat: Math.max(0, p.fat) }, at: new Date().toISOString() };
 }
 
 /** Acciones sobre comidas del plan y registros, compartidas por Hoy y Plan. */
@@ -107,12 +120,14 @@ export function useMealActions() {
         mutate((d) => {
           const m = findMeal(d, meal.id);
           if (!m) return;
+          const before = mealIngredients(d, m);
           if (val && (val.foodId !== originalFoodId || val.amount <= 0)) {
             m.swaps = { ...(m.swaps ?? {}), [originalFoodId]: { ...val } };
           } else if (m.swaps) {
             delete m.swaps[originalFoodId];
             if (!Object.keys(m.swaps).length) delete m.swaps;
           }
+          adjustSnapshot(d, m, before);
         });
       apply(next ?? undefined);
       toast(!next ? `${labels.to} restaurado` : next.amount <= 0 ? `${labels.from} quitado de esta comida` : `${labels.from} → ${labels.to}`, {
@@ -120,6 +135,34 @@ export function useMealActions() {
       });
     },
     [mutate, toast],
+  );
+
+  /**
+   * Cambia la cantidad de un ingrediente SOLO en esta comida (por ración planificada).
+   * La receta original no se toca: el cambio vive en meal.swaps. Si vuelve a la cantidad de la
+   * receta (y es el mismo alimento), el ajuste desaparece. Sin aviso: se llama al escribir.
+   */
+  const setIngredientAmount = useCallback(
+    (meal: PlannedMeal, originalFoodId: string, foodId: string, amount: number) => {
+      if (!(amount > 0)) return;
+      mutate((d) => {
+        const m = findMeal(d, meal.id);
+        const r = m && getRecipe(d, m.recipeId);
+        if (!m || !r) return;
+        const before = mealIngredients(d, m);
+        const orig = r.ingredients.find((i) => i.foodId === originalFoodId);
+        if (foodId === originalFoodId && orig && Math.abs(orig.amount - amount) < 0.01) {
+          if (m.swaps) {
+            delete m.swaps[originalFoodId];
+            if (!Object.keys(m.swaps).length) delete m.swaps;
+          }
+        } else {
+          m.swaps = { ...(m.swaps ?? {}), [originalFoodId]: { foodId, amount } };
+        }
+        adjustSnapshot(d, m, before);
+      });
+    },
+    [mutate],
   );
 
   const addLog = useCallback(
@@ -140,10 +183,14 @@ export function useMealActions() {
   );
 
   const updateLog = useCallback(
-    (id: string, patch: Partial<Pick<FoodLogEntry, 'amount' | 'slot' | 'date'>>) => {
+    (id: string, patch: Partial<Pick<FoodLogEntry, 'amount' | 'slot' | 'date' | 'quantity' | 'unit'>>) => {
       mutate((d) => {
         const l = d.log.find((x) => x.id === id);
-        if (l) Object.assign(l, patch);
+        if (!l) return;
+        Object.assign(l, patch);
+        // cantidad en g/ml: la unidad mostrada se quita si no se indica
+        if ('amount' in patch && !('unit' in patch)) { delete l.quantity; delete l.unit; }
+        if (patch.unit === undefined && 'unit' in patch) { delete l.quantity; delete l.unit; }
       });
       toast('Registro actualizado');
     },
@@ -186,5 +233,5 @@ export function useMealActions() {
     [mutate, toast],
   );
 
-  return { setFree, toggleDone, setStatus, setPortion, swap, swapIngredient, addLog, updateLog, removeLog, addPlanned };
+  return { setFree, toggleDone, setStatus, setPortion, swap, swapIngredient, setIngredientAmount, addLog, updateLog, removeLog, addPlanned };
 }

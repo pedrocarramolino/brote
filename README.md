@@ -20,12 +20,12 @@ Al abrirla por primera vez puedes **crear tu perfil** (cuestionario de 7 pasos, 
 | Sección | Funcionalidad |
 | --- | --- |
 | **Hoy** | Saludo, selector de día, anillo de calorías y barras de macros que se recalculan al marcar/registrar, línea temporal de comidas con horarios, hábitos (agua, pasos, actividad, comidas, personalizados), resumen de actividad y peso |
-| **Plan** | Semana navegable, propuesta semanal con **Aceptar menú**, **Otra propuesta** (solo cambia lo no aceptado) y **Cambiar día**, avisos cuando el catálogo no permite cumplir todas las reglas, detalle de receta (ingredientes escalados, pasos, alérgenos, fibra, equivalencias), «Cambiar plato» con Sorpréndeme y deshacer |
+| **Plan** | Semana navegable, propuesta semanal con **Aceptar menú**, **Otra propuesta** (solo cambia lo no aceptado) y **Cambiar día**, avisos cuando el catálogo no permite cumplir todas las reglas, detalle de receta (ingredientes escalados, pasos, alérgenos, fibra, equivalencias, cantidad de cada ingrediente editable solo en esa comida sin tocar la receta original), «Cambiar plato» con Sorpréndeme y deshacer |
 | **Comida libre** | Cualquier comida de la semana puede marcarse como «comida libre» desde «Cambiar plato» o el menú de la comida: no suma calorías previstas, no entra en la compra, se respeta al pedir otra propuesta y se puede deshacer para volver al plato del plan |
 | **Mis platos** | «Crear mi plato»: nombre libre, ingredientes con cantidad y unidad (g, kg, ml, l, unidades, cucharadas cuando hay conversión fiable), raciones, foto, descripción y pasos opcionales; calorías, macros y fibra del plato completo y por ración en tiempo real; editar, duplicar y eliminar; registrar en Hoy por raciones (½, 1…) y añadir al menú; el historial guarda una copia de los valores |
-| **Alimentos** | Unos 5.900 alimentos: los de BEDCA (AESAN) y USDA FoodData Central con valores por 100 g, más 4.860 productos de 121 marcas de supermercados españoles con datos de etiqueta (Open Food Facts). Buscador por nombre, marca, categoría y variedad, que tolera erratas y distingue «Genérico» y «Marca»; muestra saturadas, azúcares, fibra y sal cuando hay dato |
+| **Alimentos** | Unos 1.080 alimentos genéricos, sin marcas comerciales, con un valor de referencia por 100 g/ml de BEDCA (AESAN) y USDA FoodData Central. Se conservan las variedades distintas (leche entera, semidesnatada, desnatada y sin lactosa, bebidas vegetales…). Buscador por nombre, categoría y variedad, que tolera erratas; muestra saturadas, azúcares, fibra y sal cuando hay dato |
 | **Recetas** | Biblioteca de 672 recetas con nombre comercial y descripción, buscador por nombre/ingrediente, filtros (categoría, cocina, tiempo, calorías, proteína, ingrediente principal, dificultad, dieta), favoritas, recientes, colecciones y «Sorpréndeme» con «Añadir al menú» |
-| **Registro** | Búsqueda local, favoritos, recientes, cantidades con raciones típicas, edición y borrado (con deshacer), alimentos personalizados con validación, Open Food Facts opcional, registro por foto/texto (modo demo honesto si no hay IA) |
+| **Registro** | Búsqueda local, favoritos, recientes, cantidades editables en unidades o gramos/ml (−/+ o escribiendo, con decimales: 2 kiwis → 1, medio plátano, 150 → 100 g), edición y borrado (con deshacer), alimentos personalizados con validación, registro por foto/texto (modo demo honesto si no hay IA) |
 | **Compra** | Generada desde el menú, agrupada por secciones, suma cantidades, marca de comprado, edición de cantidades, productos manuales, modo tienda, copiar lista; los cambios manuales se conservan al modificar el menú |
 | **Progreso** | Periodos 7 d / 1 m / 3 m / 6 m, peso, medidas, cumplimiento del plan, consistencia de hábitos, pasos y minutos de actividad; estados vacíos y aviso de que el peso no equivale a grasa |
 | **Actividad** | Plan semanal por tipo (casa, gimnasio, general, descanso) según la preferencia del usuario, rutinas demo, registro de sesiones con duración y observaciones, pasos |
@@ -42,7 +42,7 @@ src/
                     (nombres comerciales de v1/v2), v3/ (recetas nuevas por categoría)
   services/         Lógica sin UI: nutrición, planificador (rotación 4 semanas), biblioteca
                     (colecciones e historial), sustituciones, compra, hábitos,
-                    equivalencias, base de alimentos (local + Open Food Facts), almacenamiento,
+                    equivalencias, base de alimentos genéricos, almacenamiento,
                     ai/ (contexto, proveedor demo, proveedor remoto)
   store/            Estado global + persistencia (DataRepository)
   components/       UI reutilizable (botones, hojas modales, avisos, confirmaciones, menús…)
@@ -63,7 +63,7 @@ PROJECT_CONTEXT.md        Resumen técnico del proyecto
 
 - **BEDCA**: AESAN/BEDCA, Base de Datos Española de Composición de Alimentos v1.0 (2010). Se usa para fines no comerciales y citando la fuente, como exigen sus condiciones; un uso comercial requeriría autorización de AESAN.
 - **USDA FoodData Central, SR Legacy**: dominio público.
-- **Open Food Facts**: productos de marca con datos de etiqueta aportados por la comunidad. Licencia ODbL; `src/data/foodDb/branded.json` es una base de datos derivada bajo esa misma licencia (© colaboradores de Open Food Facts).
+- **Open Food Facts** (ODbL, © colaboradores de Open Food Facts): solo la mediana de etiquetas de productos equivalentes para tres variedades sin dato oficial (leche entera, semidesnatada y desnatada sin lactosa). Brote no incluye marcas comerciales.
 
 Cómo se generan y qué se excluye: `PROJECT_CONTEXT.md` y `src/data/foodDb/report.json`.
 
@@ -72,7 +72,7 @@ Cómo se generan y qué se excluye: `PROJECT_CONTEXT.md` y `src/data/foodDb/repo
 Arquitectura: **biblioteca → recetas → planificación semanal → registro diario**. Las recetas viven en `src/data/recipeLibrary` como datos (no dentro de componentes) y se identifican por un `id` estable que usan menús, favoritos, historial y lista de la compra. Para añadir recetas basta con añadir filas a `v3/*.ts`; la interfaz no cambia.
 
 - **672 recetas**: 130 desayunos, 180 comidas, 133 cenas, 79 meriendas, 66 de media mañana, 46 snacks y 38 postres. Cocina española, mediterránea, italiana, mexicana, asiática, americana y del mundo; pollo, pavo, ternera, cerdo, pescado blanco y azul, atún, marisco, huevo, lácteos, legumbres y proteína vegetal.
-- **Cada receta**: id, nombre comercial (`title`, p. ej. «Pollo Power Bowl»), nombre descriptivo (`name`), categoría, franjas, cocina, ingrediente principal, raciones, tiempo, dificultad, ingredientes con cantidad y unidad **por ración**, pasos, etiquetas. Alérgenos, compatibilidad con dietas, calorías, macros y fibra se **calculan** desde los ingredientes (no se escriben a mano) y se muestran como **valores estimados**; solo los productos con datos de envase (Open Food Facts) cuentan como verificados.
+- **Cada receta**: id, nombre comercial (`title`, p. ej. «Pollo Power Bowl»), nombre descriptivo (`name`), categoría, franjas, cocina, ingrediente principal, raciones, tiempo, dificultad, ingredientes con cantidad y unidad **por ración**, pasos, etiquetas. Alérgenos, compatibilidad con dietas, calorías, macros y fibra se **calculan** desde los ingredientes (no se escriben a mano) y se muestran como **valores estimados**; cuentan como verificados los calculados al 100 % con BEDCA, USDA o media de etiquetas.
 - **Fotografías**: no hay fotos reales verificadas de cada plato. Se usa una portada ilustrada propia (icono del tipo de plato + colores de sus ingredientes), marcada como «Ilustración · sin foto real» en el detalle. El modelo admite `imageUrl` para añadir fotos reales más adelante.
 - `npm run check:library` valida ids, nombres comerciales únicos, alimentos existentes, pasos, rangos de calorías por categoría y coherencia kcal/macros, y simula 8 semanas de menús con varios perfiles (repeticiones en la semana, rotación de 4 semanas, proteína en comidas consecutivas, sustituciones y lista de la compra).
 
@@ -97,7 +97,7 @@ El backend (`api/assistant.ts`) elige la credencial en el servidor:
 
 ## Privacidad
 
-Los datos se guardan solo en el navegador. No hay analítica ni envío a terceros salvo que el usuario active Open Food Facts (se envía solo el término de búsqueda) o comparta su contexto con un asistente IA configurado (nunca peso ni medidas). Exportación en JSON y borrado total desde Perfil. No se afirma el cumplimiento de ninguna normativa o certificación.
+Los datos se guardan solo en el navegador. No hay analítica ni envío a terceros salvo que el usuario comparta su contexto con un asistente IA configurado (nunca peso ni medidas). El buscador de alimentos funciona sin conexión. Exportación en JSON y borrado total desde Perfil. No se afirma el cumplimiento de ninguna normativa o certificación.
 
 ## Pendiente / siguientes pasos
 

@@ -1,3 +1,4 @@
+import { qtyLabel } from '../meals/QuantityEditor';
 import { ArrowLeftRight, Ban, Check, Minus, Plus, PartyPopper, RotateCcw } from 'lucide-react';
 import type { FoodLogEntry, ISODate, MealSlot, PlannedMeal } from '../../types';
 import { useData } from '../../store/AppStore';
@@ -135,7 +136,7 @@ export function MealTimeline({ date, meals, onOpenRecipe, onSwap, onAddFood, onE
                           <button type="button" onClick={() => onEditLog(l)} className="flex min-h-[40px] w-full items-center justify-between gap-3 rounded-[8px] text-left text-[14px] hover:bg-surface2/60" data-log-entry={l.recipeId ? 'plato' : 'alimento'}>
                             <span className="min-w-0 truncate">
                               <span className="font-medium">{l.snapshot ? l.snapshot.name : f?.name ?? 'Alimento eliminado'}</span>
-                              <span className="tabular text-ink3"> · {l.snapshot ? servingsLabel(l.amount) : `${n0(l.amount)} ${f?.unit ?? ''}`}</span>
+                              <span className="tabular text-ink3"> · {l.snapshot ? servingsLabel(l.amount) : l.unit && l.quantity ? `${qtyLabel(l.quantity, l.unit)} · ${n0(l.amount)} ${f?.unit ?? ''}` : `${n0(l.amount)} ${f?.unit ?? ''}`}</span>
                             </span>
                             <span className="tabular shrink-0 text-ink2">{m ? `${n0(m.kcal)} kcal` : '—'}</span>
                           </button>

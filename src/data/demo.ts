@@ -34,7 +34,6 @@ export function baseProfile(partial: Partial<UserProfile> = {}): UserProfile {
     waterTarget: 8,
     targets: {},
     shareContextWithAI: false,
-    useOpenFoodFacts: false,
     createdAt: new Date().toISOString(),
     ...partial,
   };

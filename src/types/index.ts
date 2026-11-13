@@ -51,7 +51,6 @@ export interface UserProfile {
   targets: NutritionTargets;
   /** Consentimiento explícito para enviar contexto a servicios externos */
   shareContextWithAI: boolean;
-  useOpenFoodFacts: boolean;
   createdAt: string;
 }
 
@@ -84,8 +83,6 @@ export interface Food {
   ref?: string;
   /** falta algún macronutriente en la fuente (se cuenta como 0 y se avisa) */
   incomplete?: boolean;
-  /** envase del producto comercial (p. ej. «1 l») */
-  quantity?: string;
   /** la fuente da los valores por 100 g y la app los aplica a 100 ml (densidad ≈ 1) */
   approxMl?: boolean;
   category: ShopCategory;
@@ -96,6 +93,7 @@ export interface Food {
   portion?: { label: string; amount: number };
   /** id de alimento crudo/seco equivalente para la lista de la compra */
   tags?: ('animal' | 'carne' | 'pescado' | 'lacteo' | 'huevo')[];
+  /** @deprecated Brote ya no guarda marcas comerciales; solo existe en datos antiguos hasta migrarlos */
   brand?: string;
 }
 
@@ -231,6 +229,9 @@ export interface FoodLogEntry {
   foodId: string;
   /** g/ml del alimento o, si es un plato, número de raciones */
   amount: number;
+  /** cantidad tal y como la escribió el usuario (p. ej. 2 unidades); amount sigue en g/ml */
+  quantity?: number;
+  unit?: QtyUnit;
   createdAt: string;
   method: 'manual' | 'foto-demo' | 'texto-demo' | 'texto-ia' | 'foto-ia' | 'plato';
   /** plato de «Mis platos» registrado */

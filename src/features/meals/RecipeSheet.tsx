@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { ArrowLeftRight, CalendarPlus, Check, ChevronDown, Clock, Copy, Heart, Info, PencilLine, RotateCcw, Trash2, UtensilsCrossed, Users } from 'lucide-react';
 import { MoreMenu } from '../../components/ui/Menu';
 import { useFeedback } from '../../components/ui/Feedback';
-import { deleteDish, duplicateDish } from '../../services/dishes';
+import { deleteDish, duplicateDish, unitSize } from '../../services/dishes';
+import { QuantityEditor, amountLabel, qtyFromBase, qtyToBase, type QtyValue } from './QuantityEditor';
 import { todayISO } from '../../lib/dates';
-import type { PlannedMeal, Recipe } from '../../types';
+import type { Food, PlannedMeal, Recipe } from '../../types';
 import { Sheet } from '../../components/ui/Sheet';
 import { Badge, Button, IconButton, Stepper, cx } from '../../components/ui/primitives';
 import { useData, useStore } from '../../store/AppStore';
@@ -38,6 +39,8 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap, onAddToPlan, 
   const { toast, confirm } = useFeedback();
   const [openIng, setOpenIng] = useState<string | null>(null);
   const [whole, setWhole] = useState(false);
+  // al restablecer una cantidad se vuelve a montar su editor con el valor de la receta
+  const [qtyResets, setQtyResets] = useState(0);
   useEffect(() => setWhole(false), [recipe?.id, open]);
 
   if (!recipe) return null;
@@ -239,11 +242,34 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap, onAddToPlan, 
                   {orig && <span className="block text-[12px] font-medium text-accent-deep">Sustituye a {orig.name.toLowerCase()}</span>}
                   {f && <span className="tabular block text-[12px] text-ink3">{n0(foodMacros(f, amount).kcal)} kcal</span>}
                 </span>
-                <span className="tabular shrink-0 text-[15px] font-semibold text-ink2">{n0(amount)} {f?.unit ?? 'g'}</span>
+                {ing.original !== undefined && !orig && <span className="sr-only">Cantidad cambiada en esta comida</span>}
+                <span className="tabular shrink-0 text-right text-[15px] font-semibold text-ink2" data-ingredient-amount>
+                  {amountLabel(f, amount)}
+                  {ing.original !== undefined && <span className="block text-[11px] font-medium text-accent-deep">Cambiada</span>}
+                </span>
                 {canExpand && <ChevronDown size={16} className={cx('shrink-0 text-ink3 transition-transform', expanded && 'rotate-180')} aria-hidden="true" />}
               </button>
               {expanded && (
                 <div className="anim-fade bg-surface px-4 pb-3 pt-1">
+                  {editable && f && (
+                    <div className="mb-3" data-ingredient-qty={key}>
+                      <p className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-ink3">Cantidad en esta comida</p>
+                      <IngredientQty key={`${f.id}-${qtyResets}`} food={f} amount={amount} onCommit={(b) => actions.setIngredientAmount(meal!, key, f.id, b / qty)} />
+                      {ing.original !== undefined && (
+                        <p className="mt-1.5 flex flex-wrap items-center gap-x-2 text-[13px] text-ink3" data-original-amount>
+                          Receta original: {amountLabel(f, ing.original * qty)}
+                          <button
+                            type="button"
+                            className="min-h-[36px] rounded-[8px] px-2 font-semibold text-accent-deep hover:bg-accentSoft"
+                            onClick={() => { actions.setIngredientAmount(meal!, key, f.id, ing.original!); setQtyResets((n) => n + 1); }}
+                            data-reset-amount
+                          >
+                            Restablecer
+                          </button>
+                        </p>
+                      )}
+                    </div>
+                  )}
                   {!!eq?.items.length && (
                     <>
                       <p className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-ink3">
@@ -321,7 +347,7 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap, onAddToPlan, 
       </ul>
       <p className="mt-1.5 px-1 text-[12px] text-ink3">
         {editable
-          ? 'Toca un ingrediente y elige una equivalencia para cambiarlo solo en esta comida. Los valores y la lista de la compra se actualizan.'
+          ? 'Toca un ingrediente para cambiar su cantidad (en unidades o gramos) o sustituirlo solo en esta comida. La receta original no cambia; los valores y la lista de la compra se actualizan.'
           : 'Toca un ingrediente para ver con qué puedes intercambiarlo. Para cambiarlo, abre la receta desde una comida de tu plan.'}
       </p>
 
@@ -346,5 +372,29 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap, onAddToPlan, 
         ))}
       </ol>
     </Sheet>
+  );
+}
+
+/**
+ * Cantidad de un ingrediente en una comida del plan. Mantiene su propio texto mientras se
+ * escribe y guarda cada valor válido al momento (los totales se recalculan sin cerrar el teclado).
+ */
+function IngredientQty({ food, amount, onCommit }: { food: Food; amount: number; onCommit: (base: number) => void }) {
+  const [v, setV] = useState<QtyValue>(() => {
+    // en unidades si la cantidad equivale a un número «redondo» de piezas (½, 1, 1½, 2…)
+    const u = unitSize(food);
+    const pieces = u ? amount / u : 0;
+    return qtyFromBase(food, amount, u && Math.abs(pieces * 2 - Math.round(pieces * 2)) < 0.04 ? 'unidad' : undefined);
+  });
+  return (
+    <QuantityEditor
+      food={food}
+      value={v}
+      onChange={(next) => {
+        setV(next);
+        const b = qtyToBase(food, next);
+        if (b !== null) onCommit(b);
+      }}
+    />
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Activity, ChevronRight, ClipboardCopy, Cloud, Database, Download, FlaskConical, Globe, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react';
+import { Activity, ChevronRight, ClipboardCopy, Cloud, Database, Download, FlaskConical, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react';
 import type { Allergen, Habit, MealSlot, UserProfile } from '../types';
 import { PageHeader } from '../components/layout/AppShell';
 import { Badge, Button, Card, Chip, IconButton, Segmented, SelectField, Stepper, TextField, Toggle, cx } from '../components/ui/primitives';
@@ -270,13 +270,6 @@ export function ProfilePage({ section }: { section: string | null }) {
             label="Compartir mi plan con el asistente IA"
             description="Solo se aplica cuando hay un servicio de IA conectado. Envía menú, preferencias, alergias, cumplimiento y lista de la compra; nunca peso ni medidas."
           />
-          <Toggle
-            showState
-            checked={p.useOpenFoodFacts}
-            onChange={(v) => set('useOpenFoodFacts', v)}
-            label="Buscar en Open Food Facts"
-            description="Al buscar un alimento, el texto de búsqueda se envía a world.openfoodfacts.org. No se envía ningún dato personal."
-          />
         </div>
         <div className="mt-4 rounded-[14px] bg-surface2 px-4 py-3 text-[13px] leading-snug text-ink2">
           Tus datos de alimentación, peso y medidas se guardan únicamente en este navegador. No hay cuentas ni sincronización con servidores, y Brote no envía estadísticas de uso.
@@ -314,7 +307,6 @@ export function ProfilePage({ section }: { section: string | null }) {
         <ul className="divide-y divide-line/60">
           {[
             { icon: <Sparkles size={18} />, name: 'Asistente con IA', state: status?.mode === 'ia' ? 'Conectado' : 'No configurado · modo demostración', ok: status?.mode === 'ia' },
-            { icon: <Globe size={18} />, name: 'Open Food Facts', state: p.useOpenFoodFacts ? 'Activado' : 'Desactivado', ok: p.useOpenFoodFacts },
             { icon: <Cloud size={18} />, name: 'Cuenta y sincronización (Supabase)', state: 'No configurado · datos solo en este navegador', ok: false },
             { icon: <Database size={18} />, name: 'Salud de Apple / Google Fit', state: 'No disponible en la versión web', ok: false },
           ].map((i) => (

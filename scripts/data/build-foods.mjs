@@ -1,11 +1,11 @@
 /**
  * Construye la base de datos de alimentos de la app a partir de los datos brutos descargados.
  *
- *   node scripts/data/build-foods.mjs <dir-bedca-raw> <dir-usda-sr-csv> <off-raw.json>
+ *   node scripts/data/build-foods.mjs <dir-bedca-raw> <dir-usda-sr-csv>
  *
  * Genera en src/data/foodDb/:
  *   - official.json  alimentos genéricos de BEDCA (AESAN) y USDA FoodData Central (SR Legacy)
- *   - branded.json   productos de marca de supermercados españoles (Open Food Facts, ODbL)
+ *   - curated.json   enlace de los alimentos de la app con su dato oficial
  *   - report.json    recuento y motivos de exclusión (auditoría)
  *
  * Reglas: no se inventan valores. Un alimento necesita energía declarada; si falta algún
@@ -17,14 +17,14 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BASE_MAP, BASE_RENAME, CURATED_NEW, USDA_EXTRA, BEDCA_EXCLUDE } from './mapping.mjs';
 
-const [BEDCA_DIR, USDA_DIR, OFF_FILE] = process.argv.slice(2);
-if (!BEDCA_DIR || !USDA_DIR || !OFF_FILE) throw new Error('Uso: build-foods.mjs <bedca> <usda> <off.json>');
+const [BEDCA_DIR, USDA_DIR] = process.argv.slice(2);
+if (!BEDCA_DIR || !USDA_DIR) throw new Error('Uso: build-foods.mjs <bedca> <usda>');
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const OUT = join(ROOT, 'src', 'data', 'foodDb');
 mkdirSync(OUT, { recursive: true });
 
 const r1 = (x) => (x === null || x === undefined || !Number.isFinite(x) ? null : Math.round(x * 10) / 10);
-const report = { bedca: { total: 0, kept: 0, excluded: [] }, usda: { kept: 0 }, off: { total: 0, kept: 0, reasons: {} } };
+const report = { bedca: { total: 0, kept: 0, excluded: [] }, usda: { kept: 0 } };
 
 /** Atwater: ¿la energía declarada cuadra con los macronutrientes? */
 function plausible(v) {
@@ -163,65 +163,6 @@ if (report.missingRefs) {
 }
 
 /* ---------------- Open Food Facts (marcas) ---------------- */
-const OFF_GROUP = [
-  [/plant-based-milks|non-dairy-milk|soy-milks|almond-milks|oat-milks|rice-milks|coconut-milks/, 'Bebidas vegetales'],
-  [/cheeses/, 'Quesos'], [/yogurts|milks|dairies|fermented-milk|creams|desserts-lacteos|dairy-desserts|kefir/, 'Lácteos'],
-  [/hams|sausages|salamis|chorizos|cold-cuts|cured-meats|bacons|pates|prepared-meats/, 'Embutidos y fiambres'],
-  [/meats|poultries|chickens|turkeys|beef|porks/, 'Carnes'], [/seafood|shrimps|mussels|clams|squids|octopus|crustaceans|molluscs/, 'Mariscos'],
-  [/fishes|tunas|sardines|salmons|anchovies|fish-preserves|canned-fish/, 'Pescados'], [/eggs/, 'Huevos'],
-  [/olive-oils|vegetable-oils|oils|fats|butters|margarines/, 'Aceites y grasas'], [/legumes|pulses|chickpeas|lentils|beans/, 'Legumbres'],
-  [/nuts|seeds|peanut-butters|nut-butters/, 'Frutos secos y semillas'], [/breads|toasts|biscuits|cookies|pastries|viennoiseries|cakes|crackers|rusks/, 'Pan y bollería'],
-  [/breakfast-cereals|cereals|pastas|rices|flours|grains|mueslis|granolas|rice-cakes|corn-cakes/, 'Cereales, pasta y arroz'],
-  [/fruits|fruit-preserves|compotes/, 'Frutas'], [/vegetables|salads|mushrooms|tomatoes|potatoes/, 'Verduras y hortalizas'],
-  [/beverages|drinks|juices|waters|sodas|coffees|teas/, 'Bebidas'], [/sweets|chocolates|cocoa|confectioneries|jams|honeys|sugars|spreads|ice-creams|desserts/, 'Azúcares y dulces'],
-  [/sauces|condiments|mayonnaises|ketchups|mustards|dressings|vinegars|broths|soups|spices|hummus/, 'Salsas y condimentos'],
-  [/meals|pizzas|prepared|ready-meals|lasagnas|sandwiches|tortillas-de-patatas/, 'Platos preparados'],
-  [/protein-powders|dietary-supplements|sports-nutrition|protein-bars/, 'Proteína y suplementos'], [/tofu|tempeh|meat-alternatives|plant-based-foods/, 'Proteína vegetal'],
-];
-const ALLERGEN_OFF = { 'en:milk': 'lactosa', 'en:gluten': 'gluten', 'en:eggs': 'huevo', 'en:fish': 'pescado', 'en:crustaceans': 'marisco', 'en:molluscs': 'marisco', 'en:nuts': 'frutos_secos', 'en:peanuts': 'cacahuete', 'en:soybeans': 'soja', 'en:sesame-seeds': 'sesamo', 'en:celery': 'apio', 'en:mustard': 'mostaza', 'en:sulphur-dioxide-and-sulphites': 'sulfitos' };
-const clean = (s) => (s ?? '').replace(/\s+/g, ' ').trim();
-const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
-const titleBrand = (b) => b.split(/\s+/).map((w) => cap(w.toLowerCase())).join(' ');
-/** Variantes del mismo nombre de marca en Open Food Facts */
-const BRAND_ALIAS = [[/^d[ií]a( retail.*)?$/i, 'Dia'], [/^consum( s\. ?coop.*)?$/i, 'Consum'], [/^bon[aà]rea$/i, 'bonÀrea'], [/^carrefour( bio| discount| classic)?$/i, (m) => titleBrand(m)], [/^auchan$/i, 'Auchan (Alcampo)'], [/^alcampo$/i, 'Alcampo'], [/^nestl[eé]$/i, 'Nestlé'], [/^central lechera asturiana$/i, 'Central Lechera Asturiana'], [/^el ?pozo$/i, 'ElPozo'], [/^campofr[ií]o$/i, 'Campofrío'], [/^pr[eé]sident$/i, 'Président']];
-const normBrand = (b) => {
-  for (const [re, to] of BRAND_ALIAS) if (re.test(b)) return typeof to === 'function' ? to(b) : to;
-  return titleBrand(b);
-};
-const off = JSON.parse(readFileSync(OFF_FILE, 'utf8'));
-const branded = [];
-const seen = new Set();
-const why = (k) => (report.off.reasons[k] = (report.off.reasons[k] ?? 0) + 1);
-for (const p of Object.values(off)) {
-  report.off.total++;
-  const n = p.nutriments ?? {};
-  const num = (k) => (typeof n[k] === 'number' ? n[k] : typeof n[k] === 'string' && n[k] !== '' ? Number(n[k]) : null);
-  let kcal = num('energy-kcal_100g');
-  if (kcal === null && num('energy-kj_100g') !== null) kcal = num('energy-kj_100g') / 4.184;
-  const v = [r1(kcal), r1(num('proteins_100g')), r1(num('carbohydrates_100g')), r1(num('fat_100g')), r1(num('saturated-fat_100g')), r1(num('sugars_100g')), r1(num('fiber_100g')), r1(num('salt_100g'))];
-  const name = clean(p.product_name_es) || (p.lang === 'es' ? clean(p.product_name) : '');
-  if (!name || name.length < 3) { why('sin nombre en español'); continue; }
-  if (v.slice(0, 4).some((x) => x === null || x < 0)) { why('tabla nutricional incompleta'); continue; }
-  if (v[0] > 900 || v[1] + v[2] + v[3] > 105 || (v[4] ?? 0) > v[3] + 0.5 || (v[5] ?? 0) > v[2] + 0.5) { why('valores imposibles'); continue; }
-  if (!plausible(v)) { why('energía incoherente con macronutrientes'); continue; }
-  const brand = normBrand(clean((p.brands ?? '').split(',')[0]));
-  if (!brand) { why('sin marca'); continue; }
-  const key = `${name.toLowerCase()}|${brand.toLowerCase()}|${v[0]}`;
-  if (seen.has(key)) { why('duplicado'); continue; }
-  seen.add(key);
-  const cats = (p.categories_tags ?? []).join(' ');
-  const group = OFF_GROUP.find(([re]) => re.test(cats))?.[1] ?? groupOf(name);
-  // bebidas: las etiquetas europeas las declaran por 100 ml aunque OFF no indique el envase
-  const liquid = /^(leche(?! (en polvo|condensada|evaporada))|bebida|zumo|néctar|nectar|refresco|agua|batido|kéfir|kefir|caldo|horchata|gazpacho|salmorejo)/i.test(name) || (/yogur líquido|para beber/i.test(name));
-  const per = p.nutrition_data_per === '100ml' || liquid || (/\d\s*(ml|cl|l)\b/i.test(p.quantity ?? '') && /aceite|vinagre|salsa de soja/i.test(name)) ? 'ml' : 'g';
-  const al = [...new Set((p.allergens_tags ?? []).map((x) => ALLERGEN_OFF[x]).filter(Boolean))];
-  const t = tagsOf(group, name);
-  if (al.includes('lactosa') && !t.includes('lacteo') && group !== 'Bebidas vegetales') { t.push('animal', 'lacteo'); }
-  branded.push({ id: `off_${p.code}`, n: cap(name).slice(0, 90), b: brand, q: clean(p.quantity).slice(0, 20) || undefined, u: per, v, g: group, a: al, t: [...new Set(t)] });
-  report.off.kept++;
-}
-branded.sort((a, b) => a.b.localeCompare(b.b, 'es') || a.n.localeCompare(b.n, 'es'));
-
 /* ---------------- salida ---------------- */
 const officialArr = [...official.values()].sort((a, b) => a.n.localeCompare(b.n, 'es'));
 writeFileSync(join(OUT, 'official.json'), JSON.stringify(officialArr));
@@ -232,9 +173,7 @@ writeFileSync(join(OUT, 'curated.json'), JSON.stringify({
   rename: BASE_RENAME,
   added: CURATED_NEW.map(([id, name, ref, unit, cat, al, portion, tags]) => ({ id, name, ref: asId(ref), unit, cat, al, portion, tags })),
 }));
-writeFileSync(join(OUT, 'branded.json'), JSON.stringify(branded));
-report.counts = { official: officialArr.length, visibleOfficial: officialArr.filter((x) => !x.hidden).length, branded: branded.length, brands: new Set(branded.map((x) => x.b)).size };
-report.groups = Object.fromEntries(Object.entries(officialArr.concat(branded).reduce((a, x) => ((a[x.g] = (a[x.g] ?? 0) + 1), a), {})).sort((a, b) => b[1] - a[1]));
-report.topBrands = Object.entries(branded.reduce((a, x) => ((a[x.b] = (a[x.b] ?? 0) + 1), a), {})).sort((a, b) => b[1] - a[1]).slice(0, 40);
+report.counts = { official: officialArr.length, visibleOfficial: officialArr.filter((x) => !x.hidden).length };
+report.groups = Object.fromEntries(Object.entries(officialArr.reduce((a, x) => ((a[x.g] = (a[x.g] ?? 0) + 1), a), {})).sort((a, b) => b[1] - a[1]));
 writeFileSync(join(OUT, 'report.json'), JSON.stringify(report, null, 1));
-console.log(JSON.stringify(report.counts), '\nBEDCA', report.bedca.kept, '/', report.bedca.total, 'excluidos', report.bedca.excluded.length, '\nOFF', report.off.kept, '/', report.off.total, report.off.reasons);
+console.log(JSON.stringify(report.counts), '\nBEDCA', report.bedca.kept, '/', report.bedca.total, 'excluidos', report.bedca.excluded.length);
