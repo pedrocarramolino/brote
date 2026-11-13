@@ -12,7 +12,8 @@ import {
   allowedUnits, compressPhoto, defaultQuantity, dishNutrition, DISH_CATEGORIES, draftFromRecipe, emptyDraft, saveDish, toBaseAmount, UNIT_LABEL, unitSize, validateDraft, type DishDraft,
 } from '../../services/dishes';
 import { QUALITY_TEXT } from '../../services/recipeMeta';
-import { FoodRow } from '../log/LogFoodSheet';
+import { FoodRow, FoodSourcesNote, KindFilter } from '../log/LogFoodSheet';
+import type { FoodKind } from '../../services/foodSearch';
 import { CustomFoodForm } from '../log/CustomFoodForm';
 import { useFoodSearch } from '../log/useFoodSearch';
 
@@ -332,8 +333,8 @@ const fmt = (v: number) => String(Math.round(v * 100) / 100).replace('.', ',');
 function IngredientPicker({ onPick, onCreate, onBack }: { onPick: (f: Food) => void; onCreate: () => void; onBack: () => void }) {
   const data = useData();
   const [q, setQ] = useState('');
-  const { local, remote, remoteEnabled, retry } = useFoodSearch(data, q, true);
-  const list = q.trim() ? local : local.filter((f) => f.source === 'usuario').concat(local.filter((f) => f.source !== 'usuario')).slice(0, 40);
+  const [kind, setKind] = useState<FoodKind | 'todos'>('todos');
+  const { local: list, remote, remoteEnabled, retry } = useFoodSearch(data, q, true, kind);
   return (
     <div className="anim-fade">
       <div className="sticky top-0 z-10 -mx-5 bg-surface px-5 pb-3">
@@ -342,9 +343,10 @@ function IngredientPicker({ onPick, onCreate, onBack }: { onPick: (f: Food) => v
           <label className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-[12px] bg-surface2 px-3 focus-within:ring-2 focus-within:ring-accent">
             <Search size={18} className="text-ink3" aria-hidden="true" />
             <span className="sr-only">Buscar alimento</span>
-            <input data-autofocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Arroz, pollo, tomate…" className="h-full w-full bg-transparent text-[17px] placeholder:text-ink3 focus:outline-none" type="search" enterKeyHint="search" data-ingredient-search />
+            <input data-autofocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Leche, queso, Hacendado…" className="h-full w-full bg-transparent text-[17px] placeholder:text-ink3 focus:outline-none" type="search" enterKeyHint="search" data-ingredient-search />
           </label>
         </div>
+        <KindFilter value={kind} onChange={setKind} />
       </div>
       <button type="button" onClick={onCreate} className="press mb-2 flex w-full items-center gap-2 rounded-[14px] bg-surface2 px-3 py-3 text-left text-[14px] font-semibold">
         <Plus size={18} className="text-accent" /> ¿No está? Crea el alimento con sus valores por 100 g
@@ -369,7 +371,7 @@ function IngredientPicker({ onPick, onCreate, onBack }: { onPick: (f: Food) => v
           {remote.items.length > 0 && <ul className="divide-y divide-line/60">{remote.items.map((f) => <FoodRow key={f.id} food={f} onClick={() => onPick(f)} />)}</ul>}
         </div>
       )}
-      <p className="mt-4 text-[12px] leading-snug text-ink3">Valores medios por 100 g o 100 ml de la base de alimentos de Brote (aproximados, no contrastados uno a uno con BEDCA). Los productos de Open Food Facts usan los datos del fabricante.</p>
+      <FoodSourcesNote />
     </div>
   );
 }

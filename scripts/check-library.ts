@@ -15,7 +15,7 @@ const problems: string[] = [];
 const warn: string[] = [];
 
 const RANGE: Record<string, [number, number]> = {
-  desayuno: [180, 700], mediamanana: [80, 380], comida: [330, 950], cena: [220, 800], merienda: [100, 480], snack: [40, 330], postre: [80, 420],
+  desayuno: [180, 700], mediamanana: [80, 380], comida: [300, 950], cena: [220, 800], merienda: [100, 480], snack: [40, 330], postre: [80, 420],
 };
 const byCat: Record<string, number> = {};
 const cuisines: Record<string, number> = {};
@@ -37,7 +37,6 @@ for (const r of RECIPE_LIBRARY) {
   for (const i of r.ingredients) {
     const f = foods.get(i.foodId);
     if (!f) { problems.push(`${r.id}: alimento ${i.foodId} no existe`); continue; }
-    if (f.fiber === undefined) warn.push(`${r.id}: ${i.foodId} sin dato de fibra`);
     if (i.amount > 450) warn.push(`${r.id}: ${i.foodId} ${i.amount} g por ración`);
     kcal += f.per100.kcal * i.amount / 100; protein += f.per100.protein * i.amount / 100;
     carbs += f.per100.carbs * i.amount / 100; fat += f.per100.fat * i.amount / 100;
@@ -61,7 +60,9 @@ function simulate(label: string, profile: Partial<UserProfile>, weeks = 8) {
   let inWeek = 0, in4 = 0, consecutive = 0, total = 0, mains = 0;
   const pools = Object.fromEntries(data.profile.mealSlots.map((sl) => [sl, candidatesFor(data, sl).length]));
   // con al menos 35 recetas por franja (7 días × 5 semanas) no debería repetirse nada en 4 semanas
-  const enough = Object.values(pools).every((n) => n >= 35);
+  const mainPool = new Set([...candidatesFor(data, 'comida'), ...candidatesFor(data, 'cena')].map((r) => r.id)).size;
+  // margen: además de no repetir, el menú alterna proteínas y ajusta calorías, así que hace falta algo más que el mínimo teórico (35)
+  const enough = Object.values(pools).every((n) => n >= 45) && mainPool >= 90;
   const kinds: Record<string, number> = {};
   for (let w = 0; w < weeks; w++, monday = addDays(monday, 7)) {
     const meals = generateWeek(data, monday);

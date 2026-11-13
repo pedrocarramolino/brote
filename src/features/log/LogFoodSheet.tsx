@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Camera, ChevronLeft, ChevronRight, Globe, Heart, Plus, RotateCw, Search, Trash2 } from 'lucide-react';
 import type { Food, FoodLogEntry, ISODate, MealSlot, Recipe } from '../../types';
 import { Sheet } from '../../components/ui/Sheet';
@@ -9,7 +9,9 @@ import { foodMacros, recipeNutrition, scaleMacros } from '../../services/nutriti
 import { dishLogEntry, userDishes } from '../../services/dishes';
 import { recipeTitle } from '../../services/recipeMeta';
 import { RecipeCover } from '../meals/RecipeBits';
-import { openFoodFactsProvider, searchLocal, SOURCE_LABEL } from '../../services/foodDatabase';
+import { SOURCE_LABEL } from '../../services/foodDatabase';
+import { useFoodSearch } from './useFoodSearch';
+import { kindOf, type FoodKind } from '../../services/foodSearch';
 import { n0, parseDecimal, servingsLabel } from '../../lib/format';
 import { relativeDayLabel } from '../../lib/dates';
 import { MacroGrid } from '../meals/RecipeBits';
@@ -36,6 +38,7 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
   const { mutate } = useStore();
   const { addLog, updateLog, removeLog } = useMealActions();
 
+  const [kind, setKind] = useState<FoodKind | 'todos'>('todos');
   const [view, setView] = useState<'list' | 'amount' | 'custom' | 'dish'>('list');
   const [dish, setDish] = useState<Recipe | null>(null);
   const [servingsText, setServingsText] = useState('1');
@@ -46,17 +49,12 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
   const [slot, setSlot] = useState<MealSlot>(initialSlot);
   const [amountError, setAmountError] = useState<string | null>(null);
 
-  // Open Food Facts (opcional)
-  const [offState, setOffState] = useState<{ status: 'idle' | 'loading' | 'error' | 'done'; items: Food[]; error?: string }>({ status: 'idle', items: [] });
-  const [offTick, setOffTick] = useState(0);
-  const abortRef = useRef<AbortController | null>(null);
-
   useEffect(() => {
     if (!open) return;
     setSlot(initialSlot);
     setQuery('');
     setTab('buscar');
-    setOffState({ status: 'idle', items: [] });
+    setKind('todos');
     setDish(null);
     if (editEntry?.snapshot) {
       setServingsText(String(editEntry.amount).replace('.', ','));
@@ -80,7 +78,9 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editEntry?.id, initialDish?.id]);
 
-  const local = useMemo(() => searchLocal(data, query).slice(0, 40), [data, query]);
+  const search = useFoodSearch(data, query, open && view === 'list' && tab === 'buscar', kind);
+  const local = search.local;
+  const offState = search.remote;
   const favorites = useMemo(() => data.favorites.foods.map((id) => getFood(data, id)).filter((f): f is Food => !!f), [data]);
   const recents = useMemo(() => {
     const seen = new Set<string>();
@@ -93,29 +93,6 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
     });
     return out;
   }, [data]);
-
-  useEffect(() => {
-    if (!open || !data.profile.useOpenFoodFacts || tab !== 'buscar') return;
-    const q = query.trim();
-    if (q.length < 3) {
-      setOffState({ status: 'idle', items: [] });
-      return;
-    }
-    const t = setTimeout(() => {
-      abortRef.current?.abort();
-      const ac = new AbortController();
-      abortRef.current = ac;
-      setOffState({ status: 'loading', items: [] });
-      openFoodFactsProvider
-        .search(q, ac.signal)
-        .then((items) => setOffState({ status: 'done', items }))
-        .catch((e: Error) => {
-          if (e.name === 'AbortError') return;
-          setOffState({ status: 'error', items: [], error: 'No se ha podido consultar Open Food Facts. Comprueba la conexión e inténtalo de nuevo.' });
-        });
-    }, 450);
-    return () => clearTimeout(t);
-  }, [query, open, tab, data.profile.useOpenFoodFacts, offTick]);
 
   const amount = parseDecimal(amountText);
   const validAmount = Number.isFinite(amount) && amount > 0 && amount <= 3000;
@@ -228,6 +205,7 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
               onChange={setTab}
               options={[{ value: 'buscar', label: 'Todos' }, { value: 'platos', label: 'Mis platos' }, { value: 'favoritos', label: 'Favoritos' }, { value: 'recientes', label: 'Recientes' }]}
             />
+            {tab === 'buscar' && <KindFilter value={kind} onChange={setKind} />}
           </div>
 
           <div className="mb-3 grid grid-cols-2 gap-2">
@@ -285,7 +263,7 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
               {offState.status === 'error' && (
                 <div className="flex items-center justify-between gap-3 rounded-[14px] bg-warnSoft px-3 py-2.5 text-[14px] text-warn">
                   <span>{offState.error}</span>
-                  <Button size="sm" variant="secondary" icon={<RotateCw size={15} />} onClick={() => setOffTick((t) => t + 1)}>Reintentar</Button>
+                  <Button size="sm" variant="secondary" icon={<RotateCw size={15} />} onClick={search.retry}>Reintentar</Button>
                 </div>
               )}
               {offState.status === 'done' && offState.items.length === 0 && <p className="py-3 text-[14px] text-ink2">Ningún producto con información nutricional completa.</p>}
@@ -296,9 +274,7 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
               )}
             </div>
           )}
-          {tab === 'buscar' && !data.profile.useOpenFoodFacts && (
-            <p className="mt-4 text-[12px] text-ink3">Puedes activar la búsqueda en Open Food Facts (productos de supermercado) en Perfil › Privacidad y datos.</p>
-          )}
+          {tab === 'buscar' && <FoodSourcesNote />}
         </div>
       )}
 
@@ -308,8 +284,8 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
             <div className="min-w-0">
               <h3 className="text-[19px] font-bold leading-snug">{food.name}</h3>
               <div className="mt-1 flex flex-wrap gap-1.5">
-                <Badge tone={food.source === 'estimacion' ? 'warn' : 'neutral'}>{SOURCE_LABEL[food.source]}</Badge>
-                {food.brand && <Badge>{food.brand}</Badge>}
+                <Badge tone={food.brand ? 'accent' : 'neutral'}>{food.brand ? food.brand : 'Genérico'}</Badge>
+                <Badge tone={food.source === 'estimacion' || food.source === 'referencia' ? 'warn' : 'neutral'}>{SOURCE_LABEL[food.source]}</Badge>
                 <Badge>{n0(food.per100.kcal)} kcal / 100 {food.unit}</Badge>
               </div>
             </div>
@@ -346,7 +322,8 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
           </SelectField>
 
           <div className="mt-5">{preview ? <MacroGrid m={preview} /> : <p className="text-[14px] text-ink3">Introduce una cantidad válida para ver los valores.</p>}</div>
-          {food.source === 'openfoodfacts' && <p className="mt-2 text-[12px] text-ink3">Datos declarados por el fabricante en Open Food Facts; pueden contener errores.</p>}
+          {preview && <ExtraNutrients food={food} amount={amount} />}
+          <FoodSourceLine food={food} />
         </div>
       )}
 
@@ -399,19 +376,89 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
 }
 
 export function FoodRow({ food, onClick }: { food: Food; onClick: () => void }) {
+  const marca = kindOf(food) === 'marca';
   return (
     <li>
-      <button type="button" onClick={onClick} className="flex min-h-[56px] w-full items-center gap-3 py-2 text-left hover:bg-surface2/50">
+      <button type="button" onClick={onClick} className="flex min-h-[56px] w-full items-center gap-3 py-2 text-left hover:bg-surface2/50" data-food-row={food.id}>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[16px] font-medium">{food.name}</span>
-          <span className="tabular block text-[13px] text-ink3">
-            {n0(food.per100.kcal)} kcal · P {n0(food.per100.protein)} · H {n0(food.per100.carbs)} · G {n0(food.per100.fat)} <span className="text-ink3">/100 {food.unit}</span>
-            {food.brand ? ` · ${food.brand}` : ''}
-            {food.source === 'usuario' ? ' · Tuyo' : ''}
+          <span className="flex min-w-0 items-center gap-1.5 text-[13px] text-ink3">
+            <span className={cx('shrink-0 rounded-full px-1.5 py-px text-[11px] font-semibold', marca ? 'bg-accentSoft text-accent-deep' : 'bg-surface2 text-ink2')} data-kind={marca ? 'marca' : 'generico'}>
+              {marca ? food.brand : 'Genérico'}
+            </span>
+            <span className="tabular shrink-0 font-medium text-ink2">{n0(food.per100.kcal)} kcal</span>
+            <span className="shrink-0">/100 {food.unit}</span>
+            <span className="truncate">· {food.source === 'usuario' ? 'Tuyo' : food.group ?? SOURCE_LABEL[food.source]}</span>
           </span>
         </span>
-        <ChevronRight size={18} className="text-ink3" aria-hidden="true" />
+        <ChevronRight size={18} className="shrink-0 text-ink3" aria-hidden="true" />
       </button>
     </li>
+  );
+}
+
+/** Filtro de tipo de alimento: todos, genéricos (BEDCA/USDA y de la app) o productos de marca. */
+export function KindFilter({ value, onChange }: { value: FoodKind | 'todos'; onChange: (v: FoodKind | 'todos') => void }) {
+  return (
+    <div className="mt-2 flex gap-1.5" role="group" aria-label="Tipo de alimento" data-kind-filter>
+      {(['todos', 'generico', 'marca'] as const).map((k) => (
+        <button
+          key={k}
+          type="button"
+          aria-pressed={value === k}
+          onClick={() => onChange(k)}
+          className={cx('press h-8 rounded-full px-3 text-[13px] font-semibold', value === k ? 'bg-ink text-surface' : 'bg-surface2 text-ink2')}
+        >
+          {k === 'todos' ? 'Todo' : k === 'generico' ? 'Genéricos' : 'Marcas'}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Saturadas, azúcares, fibra y sal de la cantidad elegida (solo los datos que existen). */
+export function ExtraNutrients({ food, amount }: { food: Food; amount: number }) {
+  const k = amount / 100;
+  const items = [
+    ['Saturadas', food.sat],
+    ['Azúcares', food.sugars],
+    ['Fibra', food.fiber],
+    ['Sal', food.salt],
+  ] as const;
+  return (
+    <p className="tabular mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-[13px] text-ink2" data-extra-nutrients>
+      {items.map(([label, v]) => (
+        <span key={label}>{label} <span className="font-semibold text-ink">{v === undefined ? 's/d' : `${(Math.round(v * k * 10) / 10).toString().replace('.', ',')} g`}</span></span>
+      ))}
+    </p>
+  );
+}
+
+/** Origen del dato, explicado en una línea. */
+export function FoodSourceLine({ food }: { food: Food }) {
+  const text: Record<Food['source'], string> = {
+    bedca: 'Fuente: AESAN/BEDCA, Base de Datos Española de Composición de Alimentos v1.0 (2010).',
+    usda: 'Fuente: USDA FoodData Central, SR Legacy (dominio público).',
+    openfoodfacts: 'Fuente: etiqueta del fabricante recogida en Open Food Facts (ODbL). Puede contener errores; compruébala con el envase.',
+    referencia: 'Valor medio estimado: no hay un equivalente fiable en BEDCA ni en USDA.',
+    usuario: 'Valores introducidos por ti.',
+    estimacion: 'Estimación aproximada.',
+  };
+  return (
+    <p className="mt-2 text-[12px] leading-snug text-ink3" data-food-source={food.source}>
+      {text[food.source]}
+      {food.ref ? ` (${food.ref})` : ''}
+      {food.incomplete ? ' Falta algún macronutriente en la fuente: se cuenta como 0.' : ''}
+      {food.approxMl ? ' Valores por 100 g aplicados a 100 ml.' : ''}
+    </p>
+  );
+}
+
+/** Nota breve sobre de dónde salen los datos del buscador. */
+export function FoodSourcesNote() {
+  return (
+    <p className="mt-4 text-[12px] leading-snug text-ink3">
+      Alimentos genéricos de BEDCA (AESAN) y USDA; productos de marca con los datos de su etiqueta (Open Food Facts).
+    </p>
   );
 }

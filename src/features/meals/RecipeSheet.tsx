@@ -14,7 +14,7 @@ import { equivalencesFor } from '../../services/equivalences';
 import { ALLERGEN_LABELS } from '../../data/foods';
 import { n0, n1 } from '../../lib/format';
 import { MacroGrid, RecipeCover } from './RecipeBits';
-import { CATEGORY_META, CUISINE_LABEL, DIET_LABEL, DIFFICULTY_LABEL, MAIN_LABEL, QUALITY_TEXT, TAG_LABEL, dietLabels, ingredientsFiber, nutritionQuality, recipeTitle } from '../../services/recipeMeta';
+import { CATEGORY_META, CUISINE_LABEL, DIET_LABEL, DIFFICULTY_LABEL, MAIN_LABEL, QUALITY_TEXT, TAG_LABEL, dietLabels, ingredientsFiber, nutritionQuality, recipeTitle, sourceSummary } from '../../services/recipeMeta';
 import { Segmented } from '../../components/ui/primitives';
 import { useMealActions } from './useMealActions';
 
@@ -167,6 +167,7 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap, onAddToPlan, 
         <span>
           <strong className="font-semibold text-ink2">{QUALITY_TEXT[nutritionQuality(data, ingredients)].label}.</strong> {QUALITY_TEXT[nutritionQuality(data, ingredients)].detail}
           {missing.length > 0 && ` ${missing.length} ingrediente(s) sin datos no se han sumado.`}
+          <span className="mt-0.5 block text-ink3" data-source-summary>Ingredientes por fuente: {sourceSummary(data, ingredients)}.</span>
         </span>
       </p>
 

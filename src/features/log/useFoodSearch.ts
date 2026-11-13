@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import type { AppData, Food } from '../../types';
-import { openFoodFactsProvider, searchLocal } from '../../services/foodDatabase';
+import { openFoodFactsProvider } from '../../services/foodDatabase';
+import { BASE_FOODS, OFFICIAL_FOODS } from '../../data/foods';
+import { FoodIndex, loadBranded, type FoodKind } from '../../services/foodSearch';
 
 export interface RemoteState {
   status: 'idle' | 'loading' | 'error' | 'done';
@@ -9,16 +11,39 @@ export interface RemoteState {
 }
 
 /**
- * Búsqueda de alimentos: base local (siempre) + Open Food Facts solo si el usuario lo activó.
- * Devuelve resultados locales al instante y los remotos con un pequeño retardo.
+ * Búsqueda de alimentos para Hoy y el creador de platos:
+ * alimentos de la app + catálogo BEDCA/USDA + productos de marca (cargados al primer uso)
+ * + alimentos propios. Opcionalmente, Open Food Facts en línea si el usuario lo activó.
  */
-export function useFoodSearch(data: AppData, query: string, active: boolean) {
-  const local = useMemo(() => searchLocal(data, query).slice(0, 40), [data, query]);
+export function useFoodSearch(data: AppData, query: string, active: boolean, kind: FoodKind | 'todos' = 'todos') {
+  const [branded, setBranded] = useState<Food[] | null>(null);
+  useEffect(() => {
+    if (!active || branded) return;
+    let alive = true;
+    loadBranded().then((b) => alive && setBranded(b)).catch(() => alive && setBranded([]));
+    return () => {
+      alive = false;
+    };
+  }, [active, branded]);
+
+  const index = useMemo(() => {
+    const idx = new FoodIndex();
+    idx.add(BASE_FOODS, 6);
+    idx.add(data.customFoods.filter((f) => f.source === 'usuario'), 5);
+    idx.add(OFFICIAL_FOODS, 4);
+    idx.add(data.customFoods.filter((f) => f.source !== 'usuario'), 0.5);
+    if (branded) idx.add(branded, 0);
+    return idx;
+  }, [data.customFoods, branded]);
+
+  const deferred = useDeferredValue(query);
+  const local = useMemo(() => index.search(deferred, { kind, limit: 60 }), [index, deferred, kind]);
+
+  // Open Food Facts en línea (opcional): solo si el usuario lo activó en Perfil
   const [remote, setRemote] = useState<RemoteState>({ status: 'idle', items: [] });
   const [tick, setTick] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
-  const enabled = active && data.profile.useOpenFoodFacts;
-
+  const enabled = active && data.profile.useOpenFoodFacts && kind !== 'generico';
   useEffect(() => {
     const q = query.trim();
     if (!enabled || q.length < 3) {
@@ -32,14 +57,14 @@ export function useFoodSearch(data: AppData, query: string, active: boolean) {
       setRemote({ status: 'loading', items: [] });
       openFoodFactsProvider
         .search(q, ac.signal)
-        .then((items) => setRemote({ status: 'done', items }))
+        .then((items) => setRemote({ status: 'done', items: items.filter((f) => !index.has(f.id)) }))
         .catch((e: Error) => {
           if (e.name === 'AbortError') return;
           setRemote({ status: 'error', items: [], error: 'No se ha podido consultar Open Food Facts. Comprueba la conexión e inténtalo de nuevo.' });
         });
     }, 450);
     return () => clearTimeout(t);
-  }, [query, enabled, tick]);
+  }, [query, enabled, tick, index]);
 
-  return { local, remote, remoteEnabled: enabled, retry: () => setTick((t) => t + 1) };
+  return { local, remote, remoteEnabled: enabled, retry: () => setTick((t) => t + 1), brandedReady: !!branded, total: index.size };
 }

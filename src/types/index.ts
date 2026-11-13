@@ -57,15 +57,37 @@ export interface UserProfile {
 
 export type ShopCategory = 'verduras' | 'proteinas' | 'lacteos' | 'cereales' | 'conservas' | 'otros';
 
-export type NutritionSource = 'referencia' | 'usuario' | 'openfoodfacts' | 'estimacion';
+/**
+ * Origen de los valores nutricionales:
+ * - bedca: Base de Datos Española de Composición de Alimentos (AESAN/BEDCA v1.0, 2010)
+ * - usda: USDA FoodData Central, SR Legacy (dominio público)
+ * - openfoodfacts: etiqueta del fabricante recogida en Open Food Facts (ODbL)
+ * - referencia: valor medio estimado (sin equivalente fiable en BEDCA ni USDA)
+ * - usuario / estimacion: introducido por el usuario o estimado por la app
+ */
+export type NutritionSource = 'bedca' | 'usda' | 'referencia' | 'usuario' | 'openfoodfacts' | 'estimacion';
 
 export interface Food {
   id: string;
   name: string;
   unit: 'g' | 'ml';
   per100: Macros;
-  /** fibra por 100 g/ml (estimada); undefined = sin dato */
+  /** fibra por 100 g/ml; undefined = sin dato */
   fiber?: number;
+  /** grasas saturadas, azúcares y sal por 100 g/ml; undefined = sin dato */
+  sat?: number;
+  sugars?: number;
+  salt?: number;
+  /** subcategoría para buscar y agrupar (p. ej. «Quesos», «Bebidas vegetales») */
+  group?: string;
+  /** referencia en la fuente: «BEDCA 2541», «USDA FDC 171077», código de barras… */
+  ref?: string;
+  /** falta algún macronutriente en la fuente (se cuenta como 0 y se avisa) */
+  incomplete?: boolean;
+  /** envase del producto comercial (p. ej. «1 l») */
+  quantity?: string;
+  /** la fuente da los valores por 100 g y la app los aplica a 100 ml (densidad ≈ 1) */
+  approxMl?: boolean;
   category: ShopCategory;
   allergens?: Allergen[];
   /** origen de los valores nutricionales */
@@ -209,6 +231,8 @@ export interface FoodLogEntry {
   recipeId?: string;
   /** valores del plato en el momento del registro: el historial no cambia si luego se edita el plato */
   snapshot?: NutritionSnapshot;
+  /** valores por 100 g/ml del alimento en el momento del registro (no cambian si se corrige la base) */
+  per100?: Macros;
   demo?: boolean;
 }
 
@@ -312,6 +336,8 @@ export interface AppData {
   steps: StepsEntry[];
   shopping: Record<string, ShoppingOverrides>; // clave: lunes de la semana
   favorites: { recipes: string[]; foods: string[] };
+  /** Versión de la base de alimentos con la que se guardaron los registros (ver migración en AppStore). */
+  foodDbVersion?: number;
   /** Historial de sustituciones de platos (las más recientes al final, máx. 300). */
   replacements?: MealReplacement[];
   chat: ChatMessage[];

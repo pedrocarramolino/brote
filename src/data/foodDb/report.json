@@ -1,0 +1,461 @@
+{
+ "bedca": {
+  "total": 969,
+  "kept": 922,
+  "excluded": [
+   [
+    "1001",
+    "Lima, cruda",
+    "lima con energía anormalmente baja"
+   ],
+   [
+    "1027",
+    "Néctar de ciruela",
+    "néctar con energía anormalmente baja"
+   ],
+   [
+    "1099",
+    "Néctar de pomelo",
+    "néctar con energía anormalmente baja"
+   ],
+   [
+    "1100",
+    "Néctar de piña",
+    "néctar con energía anormalmente baja"
+   ],
+   [
+    "1104",
+    "Néctar de melocotón",
+    "néctar con energía anormalmente baja"
+   ],
+   [
+    "2123",
+    "Kebab",
+    "energía (303.5 kcal) incoherente con sus macronutrientes"
+   ],
+   [
+    "2171",
+    "Pan rallado",
+    "pan rallado con energía anormalmente baja"
+   ],
+   [
+    "2188",
+    "Crema de almendras",
+    "crema de almendras con energía anormalmente baja"
+   ],
+   [
+    "2191",
+    "Garbanzo, en conserva",
+    "garbanzo en conserva con energía anormalmente baja"
+   ],
+   [
+    "2192",
+    "Garbanzo, hervido",
+    "garbanzo «hervido» con valores de producto seco"
+   ],
+   [
+    "2199",
+    "Judías blancas, cocidas",
+    "judías blancas «cocidas» con valores de producto seco"
+   ],
+   [
+    "2200",
+    "Lenteja, hervida",
+    "lenteja «hervida» con valores de producto seco"
+   ],
+   [
+    "2237",
+    "Nispero, conserva en su jugo",
+    "sin energía declarada"
+   ],
+   [
+    "2330",
+    "Chirla",
+    "chirla con energía anormalmente baja"
+   ],
+   [
+    "2365",
+    "Zumo de uva",
+    "sin energía declarada"
+   ],
+   [
+    "2397",
+    "Judia verde, hervida",
+    "judía verde hervida con energía anormalmente alta"
+   ],
+   [
+    "2412",
+    "Puerro, en conserva",
+    "sin energía declarada"
+   ],
+   [
+    "2490",
+    "Leche de almendra",
+    "«leche de almendra» con valores de producto en polvo"
+   ],
+   [
+    "2494",
+    "Leche materna",
+    "leche materna (fuera del ámbito de la app)"
+   ],
+   [
+    "2509",
+    "Lactosa",
+    "lactosa (ingrediente técnico)"
+   ],
+   [
+    "2572",
+    "Complejo vitaminico",
+    "no es un alimento (complejo vitamínico)"
+   ],
+   [
+    "2590",
+    "Pimienta, negra",
+    "energía (55 kcal) incoherente con sus macronutrientes"
+   ],
+   [
+    "2591",
+    "Pimienta, blanca",
+    "energía (55.4 kcal) incoherente con sus macronutrientes"
+   ],
+   [
+    "2608",
+    "Hinojo",
+    "hinojo con energía anormalmente baja"
+   ],
+   [
+    "2612",
+    "Gomasio",
+    "gomasio con energía anormalmente baja"
+   ],
+   [
+    "2661",
+    "Arroz, hervido",
+    "arroz «hervido» con valores de producto crudo"
+   ],
+   [
+    "2702",
+    "Carne de vacuno, lomo, partes magra y grasa, crudo",
+    "sin energía declarada"
+   ],
+   [
+    "2703",
+    "Carne de vacuno, solomillo, partes magra y grasa, crudo",
+    "sin energía declarada"
+   ],
+   [
+    "2704",
+    "Carne de vacuno, costillar, partes magra y grasa, crudo",
+    "sin energía declarada"
+   ],
+   [
+    "2705",
+    "Carne de vacuno, redondo, partes magra y grasa, crudo",
+    "sin energía declarada"
+   ],
+   [
+    "2706",
+    "Carne de vacuno, cadera, partes magra y grasa, crudo",
+    "sin energía declarada"
+   ],
+   [
+    "2707",
+    "Vacuno, mollejas, crudas",
+    "sin energía declarada"
+   ],
+   [
+    "2708",
+    "Carne de vacuno, rabo, partes magra y grasa, crudo",
+    "sin energía declarada"
+   ],
+   [
+    "2709",
+    "Vacuno, hígado, crudo",
+    "sin energía declarada"
+   ],
+   [
+    "2710",
+    "Carne de vacuno, carrillera, partes magra y grasa, crudo",
+    "sin energía declarada"
+   ],
+   [
+    "2714",
+    "Pistacho deshidratado suave",
+    "sin energía declarada"
+   ],
+   [
+    "771",
+    "Mermelada de albaricoque",
+    "mermelada con energía anormalmente baja"
+   ],
+   [
+    "772",
+    "Mermelada de ciruela",
+    "mermelada con energía anormalmente baja"
+   ],
+   [
+    "775",
+    "Mermelada de naranja",
+    "mermelada con energía anormalmente baja"
+   ],
+   [
+    "792",
+    "Caldo vegetal",
+    "caldo vegetal con valores de concentrado"
+   ],
+   [
+    "802",
+    "Bonito, enlatado en aceite, escurrido",
+    "energía (203.6 kcal) incoherente con sus macronutrientes"
+   ],
+   [
+    "815",
+    "Dorada, cruda",
+    "energía (77.9 kcal) incoherente con sus macronutrientes"
+   ],
+   [
+    "818",
+    "Jurel, crudo",
+    "energía (111.8 kcal) incoherente con sus macronutrientes"
+   ],
+   [
+    "843",
+    "Tenca, cruda",
+    "energía (91.9 kcal) incoherente con sus macronutrientes"
+   ],
+   [
+    "844",
+    "Trucha, ahumada",
+    "energía (197.5 kcal) incoherente con sus macronutrientes"
+   ],
+   [
+    "877",
+    "Crema de vainilla y mousse de chocolate",
+    "energía (130.9 kcal) incoherente con sus macronutrientes"
+   ],
+   [
+    "948",
+    "Queso para untar, natural, bajo en calorías",
+    "energía (141.1 kcal) incoherente con sus macronutrientes"
+   ]
+  ]
+ },
+ "usda": {
+  "kept": 152,
+  "warnings": [
+   [
+    169593,
+    "Cacao puro en polvo",
+    "energía calculada por USDA con factores específicos"
+   ],
+   [
+    172803,
+    "Levadura química",
+    "energía calculada por USDA con factores específicos"
+   ]
+  ]
+ },
+ "off": {
+  "total": 6944,
+  "kept": 4860,
+  "reasons": {
+   "sin nombre en español": 984,
+   "tabla nutricional incompleta": 679,
+   "energía incoherente con macronutrientes": 136,
+   "duplicado": 276,
+   "valores imposibles": 9
+  }
+ },
+ "counts": {
+  "official": 1074,
+  "visibleOfficial": 1074,
+  "branded": 4860,
+  "brands": 121
+ },
+ "groups": {
+  "Verduras y hortalizas": 952,
+  "Lácteos": 750,
+  "Cereales, pasta y arroz": 415,
+  "Frutas": 414,
+  "Pan y bollería": 410,
+  "Bebidas": 389,
+  "Embutidos y fiambres": 382,
+  "Quesos": 351,
+  "Azúcares y dulces": 319,
+  "Salsas y condimentos": 272,
+  "Mariscos": 244,
+  "Carnes": 197,
+  "Frutos secos y semillas": 182,
+  "Aceites y grasas": 161,
+  "Pescados": 130,
+  "Legumbres": 125,
+  "Platos preparados": 110,
+  "Proteína y suplementos": 44,
+  "Huevos": 36,
+  "Proteína vegetal": 27,
+  "Bebidas vegetales": 23,
+  "Otros": 1
+ },
+ "topBrands": [
+  [
+   "Hacendado",
+   529
+  ],
+  [
+   "Carrefour",
+   347
+  ],
+  [
+   "Eroski",
+   169
+  ],
+  [
+   "Dia",
+   165
+  ],
+  [
+   "Auchan (Alcampo)",
+   162
+  ],
+  [
+   "Danone",
+   149
+  ],
+  [
+   "Milbona",
+   145
+  ],
+  [
+   "Campofrío",
+   143
+  ],
+  [
+   "ElPozo",
+   137
+  ],
+  [
+   "Pascual",
+   135
+  ],
+  [
+   "Nestlé",
+   111
+  ],
+  [
+   "bonÀrea",
+   90
+  ],
+  [
+   "Consum",
+   87
+  ],
+  [
+   "Findus",
+   84
+  ],
+  [
+   "Deluxe",
+   79
+  ],
+  [
+   "Central Lechera Asturiana",
+   78
+  ],
+  [
+   "Helios",
+   74
+  ],
+  [
+   "Alpro",
+   73
+  ],
+  [
+   "Freshona",
+   73
+  ],
+  [
+   "Pescanova",
+   73
+  ],
+  [
+   "Hero",
+   71
+  ],
+  [
+   "Bimbo",
+   67
+  ],
+  [
+   "Lindt",
+   66
+  ],
+  [
+   "Hellmann's",
+   65
+  ],
+  [
+   "Noel",
+   65
+  ],
+  [
+   "Calvo",
+   64
+  ],
+  [
+   "Gallo",
+   64
+  ],
+  [
+   "Valor",
+   63
+  ],
+  [
+   "Puleva",
+   60
+  ],
+  [
+   "Ybarra",
+   58
+  ],
+  [
+   "Florette",
+   57
+  ],
+  [
+   "Navidul",
+   57
+  ],
+  [
+   "Kellogg's",
+   56
+  ],
+  [
+   "Buitoni",
+   55
+  ],
+  [
+   "Heinz",
+   54
+  ],
+  [
+   "Flora",
+   53
+  ],
+  [
+   "Lidl",
+   53
+  ],
+  [
+   "Arla",
+   52
+  ],
+  [
+   "Myprotein",
+   52
+  ],
+  [
+   "Gullón",
+   45
+  ]
+ ]
+}

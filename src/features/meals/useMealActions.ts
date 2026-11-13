@@ -4,7 +4,9 @@ import { useStore } from '../../store/AppStore';
 import { useFeedback } from '../../components/ui/Feedback';
 import { startOfWeek } from '../../lib/dates';
 import { uid } from '../../lib/format';
-import { getRecipe } from '../../services/catalog';
+import { getFood, getRecipe } from '../../services/catalog';
+
+const foodPer100 = (d: AppData, foodId: string) => { const f = getFood(d, foodId); return f ? { ...f.per100 } : undefined; };
 import { logReplacement } from '../../services/planner';
 import { recipeTitle } from '../../services/recipeMeta';
 
@@ -123,7 +125,9 @@ export function useMealActions() {
     (entry: Omit<FoodLogEntry, 'id' | 'createdAt'>, silent = false) => {
       const id = uid('log');
       mutate((d) => {
-        d.log.push({ ...entry, id, createdAt: new Date().toISOString() });
+        // copia de los valores del alimento: si después se corrige la base, este registro no cambia
+        const per100 = !entry.snapshot && entry.foodId ? foodPer100(d, entry.foodId) : undefined;
+        d.log.push({ ...entry, ...(per100 && !entry.per100 ? { per100 } : {}), id, createdAt: new Date().toISOString() });
       });
       if (!silent)
         toast('Alimento añadido', {

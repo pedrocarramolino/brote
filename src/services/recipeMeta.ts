@@ -47,27 +47,44 @@ export function dietLabels(data: Pick<AppData, 'customFoods'>, r: Recipe): DietL
 
 export type DataQuality = 'verificado' | 'estimado' | 'pendiente';
 
+const OFFICIAL_SOURCES = new Set(['bedca', 'usda', 'openfoodfacts']);
+
 /**
  * Calidad del dato nutricional de un conjunto de ingredientes:
- * - verificado: todos los alimentos tienen datos del envase (Open Food Facts);
- * - estimado: se calculan con valores medios de referencia o introducidos por el usuario;
+ * - verificado: todos los alimentos tienen datos de BEDCA, USDA o de la etiqueta del fabricante;
+ * - estimado: alguno usa un valor medio estimado o introducido por el usuario;
  * - pendiente: falta algún alimento en la base y su aporte no se suma.
  */
 export function nutritionQuality(data: Pick<AppData, 'customFoods'>, ingredients: { foodId: string }[]): DataQuality {
-  let allLabel = ingredients.length > 0;
+  let official = ingredients.length > 0;
   for (const i of ingredients) {
     const f = getFood(data, i.foodId);
     if (!f) return 'pendiente';
-    if (f.source !== 'openfoodfacts') allLabel = false;
+    if (!OFFICIAL_SOURCES.has(f.source)) official = false;
   }
-  return allLabel ? 'verificado' : 'estimado';
+  return official ? 'verificado' : 'estimado';
+}
+
+/** Recuento de ingredientes por fuente («BEDCA 5 · USDA 2 · estimado 1»). */
+export function sourceSummary(data: Pick<AppData, 'customFoods'>, ingredients: { foodId: string }[]): string {
+  const c: Record<string, number> = {};
+  const label: Record<string, string> = { bedca: 'BEDCA', usda: 'USDA', openfoodfacts: 'etiqueta', referencia: 'estimado', estimacion: 'estimado', usuario: 'tuyo' };
+  for (const i of ingredients) {
+    const f = getFood(data, i.foodId);
+    const k = f ? label[f.source] : 'sin datos';
+    c[k] = (c[k] ?? 0) + 1;
+  }
+  return Object.entries(c).map(([k, n]) => `${k} ${n}`).join(' · ');
 }
 
 export const QUALITY_TEXT: Record<DataQuality, { label: string; detail: string }> = {
-  verificado: { label: 'Dato verificado', detail: 'Calculado con los valores del envase de cada producto.' },
+  verificado: {
+    label: 'Datos de fuentes oficiales',
+    detail: 'Calculado con las cantidades de cada ingrediente y sus valores por 100 g de BEDCA (AESAN), USDA FoodData Central o la etiqueta del fabricante.',
+  },
   estimado: {
-    label: 'Valor estimado',
-    detail: 'Calculado a partir de los ingredientes y sus cantidades con valores medios aproximados por 100 g. Pueden variar según marca, variedad y preparación.',
+    label: 'Valor parcialmente estimado',
+    detail: 'Algún ingrediente usa un valor medio estimado (no tiene equivalente fiable en BEDCA ni USDA) o introducido por ti; el resto procede de fuentes oficiales.',
   },
   pendiente: { label: 'Datos pendientes', detail: 'Algún ingrediente no tiene datos en la base y no se ha sumado.' },
 };

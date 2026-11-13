@@ -199,7 +199,7 @@ export function generateWeek(data: AppData, monday: ISODate, opts: GenerateOptio
         score -= (usedWeek.get(r.id) ?? 0) * 120;
         if (todayIds.has(r.id)) score -= 200;
         // rotación de 4 semanas y recuperación de recetas antiguas
-        score -= (recent.get(r.id) ?? 0) * 12;
+        if (recent.has(r.id)) score -= 30 + (recent.get(r.id) ?? 0) * 10; // 4 semanas: pesa más que el ajuste fino de calorías
         if (!recent.has(r.id) && older.has(r.id)) score += 2;
         if (notWanted.has(r.id)) score -= 8;
         if (opts.avoid?.has(r.id)) score -= 60;
@@ -342,7 +342,8 @@ export function planDiagnostics(data: AppData, monday: ISODate): PlanDiagnostics
   let consecutiveSameMain = 0;
   for (let i = 1; i < mains.length; i++) if (mains[i] && mains[i] === mains[i - 1]) consecutiveSameMain++;
   const notes: string[] = [];
-  const small = slots.filter((s) => (pool[s] ?? 0) < 14);
+  // 7 días × 5 semanas: con menos de 35 recetas en una franja alguna se repetirá dentro de 4 semanas
+  const small = slots.filter((s) => (pool[s] ?? 0) < 35);
   if (small.length)
     notes.push(
       `Con tus preferencias hay pocas recetas para ${small.map((s) => `${SLOT_LABEL[s]} (${pool[s]})`).join(', ')}: puede que se repitan antes de 4 semanas. Se han priorizado tus alergias, intolerancias y preferencias.`,

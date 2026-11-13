@@ -219,6 +219,7 @@ export function dayTotals(data: AppData, date: ISODate): DayTotals {
  */
 export function logEntryMacros(data: Pick<AppData, 'customFoods'>, l: FoodLogEntry): Macros | null {
   if (l.snapshot) return scaleMacros(l.snapshot.perServing, l.amount);
+  if (l.per100) return scaleMacros(l.per100, l.amount / 100);
   const f = getFood(data, l.foodId);
   return f ? foodMacros(f, l.amount) : null;
 }

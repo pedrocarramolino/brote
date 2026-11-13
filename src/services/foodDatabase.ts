@@ -84,8 +84,10 @@ export const openFoodFactsProvider: FoodProvider = {
 };
 
 export const SOURCE_LABEL: Record<Food['source'], string> = {
-  referencia: 'Valor de referencia',
+  bedca: 'BEDCA (AESAN)',
+  usda: 'USDA FoodData Central',
+  referencia: 'Valor estimado',
   usuario: 'Introducido por ti',
-  openfoodfacts: 'Open Food Facts',
+  openfoodfacts: 'Etiqueta · Open Food Facts',
   estimacion: 'Estimación',
 };

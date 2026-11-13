@@ -4,6 +4,7 @@ import { uid } from '../lib/format';
 import { ALL_SLOTS, SLOT_META } from '../services/catalog';
 import { generateWeek } from '../services/planner';
 import { DEFAULT_HABITS, defaultActivityPlan } from './routines';
+import { FOOD_DB_VERSION } from './foods';
 
 export const DATA_VERSION = 1;
 
@@ -43,6 +44,7 @@ export function baseProfile(partial: Partial<UserProfile> = {}): UserProfile {
 export function createUserData(profile: UserProfile): AppData {
   const data: AppData = {
     version: DATA_VERSION,
+    foodDbVersion: FOOD_DB_VERSION,
     isDemo: false,
     onboarded: true,
     profile,
@@ -87,6 +89,7 @@ export function createDemoData(today = todayISO()): AppData {
 
   const data: AppData = {
     version: DATA_VERSION,
+    foodDbVersion: FOOD_DB_VERSION,
     isDemo: true,
     onboarded: true,
     profile,

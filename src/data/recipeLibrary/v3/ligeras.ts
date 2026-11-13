@@ -13,7 +13,7 @@ const mediaManana: TRow[] = [
   ['wrap-mini-pavo-queso', 'Mini Wrap Oficina', 'Mini wrap de tortilla integral con pavo, queso fresco y espinacas', 'int', 'mm,mer', 3, 'f', 1, 'sin_coccion',
     'tortilla_trigo 30, pavo_fiambre 40, queso_fresco 20, espinacas 10', ['Rellena la tortilla con el pavo, el queso y las espinacas.', 'Enrolla y corta por la mitad.']],
   ['palitos-zanahoria-queso-batido-hierbas', 'Dip de Hierbas Fresh', 'Bastones de zanahoria y pepino con dip de queso batido y hierbas', 'med', 'mm,mer', 6, 'f', 1, 'sin_coccion',
-    'zanahoria 70, pepino 70, queso_batido 100, perejil 2', ['Mezcla el queso batido con el perejil, sal, pimienta y ajo en polvo.', 'Corta las verduras en bastones y sírvelas con el dip.']],
+    'zanahoria 70, pepino 70, queso_batido 110, perejil 2', ['Mezcla el queso batido con el perejil, sal, pimienta y ajo en polvo.', 'Corta las verduras en bastones y sírvelas con el dip.']],
   ['manzana-queso-curado', 'Manzana y Manchego', 'Manzana en gajos con unas lascas de queso curado', 'es', 'mm,mer', 2, 'f', 1, 'sin_coccion',
     'manzana 150, queso_curado 15', ['Corta la manzana en gajos.', 'Acompaña con el queso en lascas finas.']],
   ['pan-pita-hummus-zanahoria', 'Pita Hummus Snack', 'Medio pan de pita con hummus y zanahoria rallada', 'med', 'mm', 4, 'f', 1, 'sin_coccion',

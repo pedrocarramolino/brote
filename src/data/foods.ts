@@ -1,4 +1,6 @@
-import type { Allergen, Food, ShopCategory } from '../types';
+import type { Allergen, Food, Macros, ShopCategory } from '../types';
+import OFFICIAL from './foodDb/official.json';
+import CURATED_JSON from './foodDb/curated.json';
 
 /*
  * Base de alimentos local.
@@ -285,17 +287,99 @@ const FIBER: Record<string, number> = {
   mantequilla: 0, nata_ligera: 0, queso_untar: 0, miso: 5.4, sirope_arce: 0, cacahuetes: 8.5, pipas_calabaza: 6,
 };
 
-export const BASE_FOODS: Food[] = rows.map(([id, name, unit, kcal, protein, carbs, fat, category, allergens, portion, tags]) => ({
-  id,
-  name,
-  unit,
-  per100: { kcal, protein, carbs, fat },
-  fiber: FIBER[id],
-  category,
-  allergens: allergens ?? [],
-  source: 'referencia',
-  portion: portion ? { label: portion[0], amount: portion[1] } : undefined,
-  tags,
+/** Valores por 100 g/ml que usaba la app antes de enlazar con BEDCA/USDA (solo para conservar el historial). */
+export const LEGACY_PER100: Record<string, Macros> = Object.fromEntries(rows.map(([id, , , kcal, protein, carbs, fat]) => [id, { kcal, protein, carbs, fat }]));
+
+/** Versión actual de la base de alimentos (2 = valores de BEDCA/USDA). */
+export const FOOD_DB_VERSION = 2;
+
+type OfficialRow = { id: string; n: string; u: 'g' | 'ml'; v: (number | null)[]; g: string; s: 'bedca' | 'usda'; r: number; a: Allergen[]; t: NonNullable<Food['tags']>; hidden?: boolean };
+const OFFICIAL_ROWS = OFFICIAL as unknown as OfficialRow[];
+const officialById = new Map(OFFICIAL_ROWS.map((r) => [r.id, r]));
+const CURATED = CURATED_JSON as unknown as {
+  base: Record<string, string | null>;
+  rename: Record<string, string>;
+  added: { id: string; name: string; ref: string; unit: 'g' | 'ml'; cat: ShopCategory; al: Allergen[]; portion: [string, number]; tags: NonNullable<Food['tags']> }[];
+};
+
+const SHOP_OF_GROUP: Record<string, ShopCategory> = {
+  'Bebidas vegetales': 'lacteos', Quesos: 'lacteos', 'Lácteos': 'lacteos', Huevos: 'proteinas', 'Embutidos y fiambres': 'proteinas', Carnes: 'proteinas',
+  Mariscos: 'proteinas', Pescados: 'proteinas', 'Aceites y grasas': 'conservas', Legumbres: 'conservas', 'Frutos secos y semillas': 'otros',
+  'Pan y bollería': 'cereales', 'Cereales, pasta y arroz': 'cereales', Frutas: 'verduras', Bebidas: 'otros', 'Azúcares y dulces': 'otros',
+  'Salsas y condimentos': 'conservas', 'Platos preparados': 'otros', 'Proteína vegetal': 'proteinas', 'Proteína y suplementos': 'otros', 'Verduras y hortalizas': 'verduras', Otros: 'otros',
+};
+const nn = (x: number | null | undefined) => (x === null || x === undefined ? undefined : x);
+
+/** Valores oficiales de una fila (kcal, P, H, G, saturadas, azúcares, fibra, sal). */
+function officialValues(r: OfficialRow, unit: 'g' | 'ml') {
+  const [kcal, protein, carbs, fat, sat, sugars, fiber, salt] = r.v;
+  return {
+    per100: { kcal: kcal ?? 0, protein: protein ?? 0, carbs: carbs ?? 0, fat: fat ?? 0 },
+    incomplete: protein === null || carbs === null || fat === null || undefined,
+    fiber: nn(fiber),
+    sat: nn(sat),
+    sugars: nn(sugars),
+    salt: nn(salt),
+    source: r.s,
+    ref: r.s === 'bedca' ? `BEDCA ${r.r}` : `USDA FDC ${r.r}`,
+    approxMl: unit === 'ml' && r.u === 'g' ? true : undefined,
+  } satisfies Partial<Food>;
+}
+
+/**
+ * Alimentos de la app (ids legibles que usan las recetas). Cuando hay un equivalente fiable,
+ * sus valores son los de BEDCA o USDA; si no, se conserva el valor medio estimado anterior.
+ */
+export const BASE_FOODS: Food[] = [
+  ...rows.map(([id, name, unit, kcal, protein, carbs, fat, category, allergens, portion, tags]): Food => {
+    const ref = CURATED.base[id];
+    const off = ref ? officialById.get(ref) : undefined;
+    const base: Food = {
+      id,
+      name: CURATED.rename[id] ?? name,
+      unit,
+      per100: { kcal, protein, carbs, fat },
+      fiber: FIBER[id],
+      category,
+      allergens: allergens ?? [],
+      source: 'referencia',
+      portion: portion ? { label: portion[0], amount: portion[1] } : undefined,
+      tags,
+      group: off?.g,
+    };
+    return off ? { ...base, ...officialValues(off, unit) } : base;
+  }),
+  ...CURATED.added.map((c): Food => {
+    const off = officialById.get(c.ref)!;
+    return {
+      id: c.id,
+      name: c.name,
+      unit: c.unit,
+      category: c.cat,
+      allergens: c.al,
+      portion: { label: c.portion[0], amount: c.portion[1] },
+      tags: c.tags.length ? c.tags : undefined,
+      group: off.g,
+      ...officialValues(off, c.unit),
+    };
+  }),
+];
+
+const usedRefs = new Set([...Object.values(CURATED.base), ...CURATED.added.map((c) => c.ref)].filter(Boolean));
+
+/**
+ * Catálogo completo de alimentos genéricos de BEDCA y USDA (los que no están ya enlazados
+ * a un alimento de la app, para no duplicarlos). Se buscan desde el creador de platos y el registro.
+ */
+export const OFFICIAL_FOODS: Food[] = OFFICIAL_ROWS.filter((r) => !r.hidden && !usedRefs.has(r.id)).map((r) => ({
+  id: r.id,
+  name: r.n,
+  unit: r.u,
+  category: SHOP_OF_GROUP[r.g] ?? 'otros',
+  allergens: r.a,
+  tags: r.t.length ? r.t : undefined,
+  group: r.g,
+  ...officialValues(r, r.u),
 }));
 
 /** Grupos de intercambio para calcular equivalencias por el macronutriente dominante */

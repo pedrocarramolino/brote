@@ -1,4 +1,4 @@
-import { BASE_FOODS } from '../data/foods';
+import { BASE_FOODS, OFFICIAL_FOODS } from '../data/foods';
 import { RECIPE_LIBRARY as BASE_RECIPES } from '../data/recipeLibrary';
 import type { AppData, Food, MealSlot, Recipe } from '../types';
 
@@ -12,15 +12,16 @@ export const SLOT_META: Record<MealSlot, { label: string; short: string; time: s
 
 export const ALL_SLOTS: MealSlot[] = ['desayuno', 'mediamanana', 'comida', 'merienda', 'cena'];
 
-const baseFoodMap = new Map(BASE_FOODS.map((f) => [f.id, f]));
+const baseFoodMap = new Map([...BASE_FOODS, ...OFFICIAL_FOODS].map((f) => [f.id, f]));
 const baseRecipeMap = new Map(BASE_RECIPES.map((r) => [r.id, r]));
 
 export function getFood(data: Pick<AppData, 'customFoods'>, id: string): Food | undefined {
   return baseFoodMap.get(id) ?? data.customFoods.find((f) => f.id === id);
 }
 
+/** Alimentos de la app, catálogo oficial (BEDCA/USDA) y alimentos propios o de marca guardados por el usuario. */
 export function allFoods(data: Pick<AppData, 'customFoods'>): Food[] {
-  return [...BASE_FOODS, ...data.customFoods];
+  return [...BASE_FOODS, ...OFFICIAL_FOODS, ...data.customFoods];
 }
 
 export function getRecipe(data: Pick<AppData, 'customRecipes'>, id: string | null | undefined): Recipe | undefined {
