@@ -12,6 +12,7 @@ import { CENAS_V3 } from './v3/cenas';
 import { MEDIA_MANANA_V3, MERIENDAS_V3, POSTRES_V3, SNACKS_V3 } from './v3/ligeras';
 import { DESAYUNOS_V4, MEDIA_MANANA_V4, MERIENDAS_V4, POSTRES_V4, SNACKS_V4 } from './v4/ligeras';
 import { CENAS_V4, COMIDAS_V4 } from './v4/principales';
+import { HAMBURGUESAS_CENA, HAMBURGUESAS_COMIDA } from './v4/hamburguesas';
 
 const foods = new Map(BASE_FOODS.map((f) => [f.id, f]));
 
@@ -39,7 +40,7 @@ function autoTags(r: Recipe): RecipeTag[] {
 export const RECIPE_LIBRARY: Recipe[] = [
   ...LEGACY_RECIPES, ...DESAYUNOS, ...MEDIA_MANANA, ...COMIDAS, ...MERIENDAS, ...CENAS, ...SNACKS, ...POSTRES,
   ...DESAYUNOS_V3, ...MEDIA_MANANA_V3, ...COMIDAS_V3, ...MERIENDAS_V3, ...CENAS_V3, ...SNACKS_V3, ...POSTRES_V3,
-  ...DESAYUNOS_V4, ...MEDIA_MANANA_V4, ...COMIDAS_V4, ...MERIENDAS_V4, ...CENAS_V4, ...SNACKS_V4, ...POSTRES_V4,
+  ...DESAYUNOS_V4, ...MEDIA_MANANA_V4, ...COMIDAS_V4, ...HAMBURGUESAS_COMIDA, ...MERIENDAS_V4, ...CENAS_V4, ...HAMBURGUESAS_CENA, ...SNACKS_V4, ...POSTRES_V4,
 ]
   .map(finalize)
   .map((r) => ({ ...r, tags: autoTags(r) }));

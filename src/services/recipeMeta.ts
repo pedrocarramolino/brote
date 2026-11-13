@@ -1,4 +1,4 @@
-import type { AppData, Cuisine, DietType, Difficulty, MainIngredient, Macros, Recipe, RecipeCategory, RecipeTag } from '../types';
+import type { AppData, PlannedMeal, Cuisine, DietType, Difficulty, MainIngredient, Macros, Recipe, RecipeCategory, RecipeTag } from '../types';
 import { getFood } from './catalog';
 import { foodAllowedByDiet, ingredientsAllergens, recipeNutrition } from './nutrition';
 
@@ -135,3 +135,13 @@ export function recipeMatches(data: Pick<AppData, 'customFoods'>, r: Recipe, nor
 /** Línea secundaria de una receta: la descripción del plato (biblioteca) o la del usuario (Mis platos). */
 export const recipeSubtitle = (r: Pick<Recipe, 'custom' | 'description' | 'title' | 'name'>): string | undefined =>
   r.custom ? r.description : r.title ? r.name : undefined;
+
+/** «Postre: manzana · + pan» para las tarjetas de comida (null si no hay nada añadido). */
+export function extrasLabel(data: Pick<AppData, 'customFoods'>, meal: Pick<PlannedMeal, 'extras' | 'free'>): string | null {
+  if (meal.free || !meal.extras?.length) return null;
+  const name = (id: string) => (getFood(data, id)?.name ?? 'alimento').toLowerCase();
+  const desserts = meal.extras.filter((e) => e.kind === 'postre').map((e) => name(e.foodId));
+  const added = meal.extras.filter((e) => e.kind !== 'postre').map((e) => name(e.foodId));
+  const parts = [desserts.length ? `Postre: ${desserts.join(', ')}` : '', added.length ? `+ ${added.join(', ')}` : ''].filter(Boolean);
+  return parts.join(' · ');
+}

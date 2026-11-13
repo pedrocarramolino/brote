@@ -7,7 +7,10 @@ import { BASE_FOODS } from '../src/data/foods';
 import { baseProfile, createUserData } from '../src/data/demo';
 import { acceptWeek, candidatesFor, generateWeek, regenerateDay, regenerateWeek } from '../src/services/planner';
 import { buildShoppingList } from '../src/services/shopping';
-import { plannedMealNutrition } from '../src/services/nutrition';
+import { dayTotals, mealIngredients, plannedMealNutrition } from '../src/services/nutrition';
+import { foodMacros } from '../src/services/nutrition';
+import { FoodIndex } from '../src/services/foodSearch';
+import { OFFICIAL_FOODS } from '../src/data/foods';
 const recipeTitleOf = (id: string | null) => { const r = RECIPE_LIBRARY.find((x) => x.id === id); return r?.title ?? r?.name; };
 import { addDays, startOfWeek } from '../src/lib/dates';
 import type { AppData, UserProfile } from '../src/types';
@@ -133,6 +136,79 @@ simulate('sin pescado ni lactosa, 30 min', { allergies: ['pescado', 'marisco', '
     if (usedIn) problems.push('La comida libre sigue en la lista de la compra');
   }
   console.log(`\nSustituciones: regenerar tras aceptar cambió ${changed} platos; sin aceptar, ${changed2}. Lista de la compra: ${keys.length} productos sin duplicados.`);
+}
+
+// ---------------------------------------------------------------------------
+// Postres en el plan y alimentos añadidos a una comida
+{
+  const months: [string, string][] = [['2026-11-09', 'noviembre'], ['2026-07-06', 'julio']];
+  for (const [monday, label] of months) {
+    const d = createUserData(baseProfile({ name: 'Postres' }));
+    d.profile.targets = { ...d.profile.targets, kcal: 2000 };
+    d.plan = {};
+    const week = generateWeek(d, monday, { seed: 'postres' });
+    const mains = week.filter((m) => m.slot === 'comida' || m.slot === 'cena');
+    const withDessert = mains.filter((m) => m.extras?.some((e) => e.kind === 'postre'));
+    const fruits = withDessert.flatMap((m) => m.extras!.map((e) => e.foodId));
+    const offSeason = label === 'noviembre' ? fruits.filter((f) => ['sandia', 'melon', 'cerezas', 'melocoton', 'albaricoque'].includes(f)) : fruits.filter((f) => ['mandarina', 'caqui', 'naranja'].includes(f));
+    const target = d.profile.targets.kcal;
+    const dayDiff = [...new Set(week.map((m) => m.date))].map((date) => { d.plan[monday] = week; return Math.abs(dayTotals(d, date).planned.kcal - target) / target; });
+    console.log(`\nPostres (${label}): ${withDessert.length} de ${mains.length} comidas y cenas · ${[...new Set(fruits)].join(', ')} · desviación media del objetivo diario ${(dayDiff.reduce((a, b) => a + b, 0) / dayDiff.length * 100).toFixed(1)} %`);
+    if (withDessert.length < mains.length * 0.25 || withDessert.length > mains.length * 0.75) problems.push(`Postres: proporción fuera de rango en ${label} (${withDessert.length}/${mains.length})`);
+    if (offSeason.length) problems.push(`Postres fuera de temporada en ${label}: ${offSeason.join(', ')}`);
+    if (new Set(fruits).size < 4) problems.push(`Postres poco variados en ${label}`);
+    if (dayDiff.some((x) => x > 0.35)) problems.push(`Con postres, algún día se aleja más de un 35 % del objetivo (${label})`);
+  }
+  // alergia a la lactosa: nunca yogur de postre
+  const lac = createUserData(baseProfile({ name: 'Sin lactosa', allergies: ['lactosa'] } as Partial<UserProfile>));
+  const lacWeek = generateWeek(lac, '2026-11-09', { seed: 'lac' });
+  if (lacWeek.some((m) => m.extras?.some((e) => e.foodId.startsWith('yogur')))) problems.push('Postre con lactosa para un perfil con alergia');
+
+  // alimento añadido: suma a la comida y al día, entra en la compra, no escala con la ración, receta intacta
+  const d = createUserData(baseProfile({ name: 'Extras' }));
+  const monday = '2026-11-09';
+  d.plan = { [monday]: generateWeek(d, monday, { seed: 'extras' }) };
+  const meal = d.plan[monday].find((m) => m.slot === 'comida' && !m.extras)!;
+  const recipe = RECIPE_LIBRARY.find((r) => r.id === meal.recipeId)!;
+  const recipeJson = JSON.stringify(recipe);
+  const before = plannedMealNutrition(d, meal).macros!.kcal;
+  const pan = foods.get('pan')!;
+  meal.extras = [{ id: 'e1', foodId: 'pan', amount: 40, kind: 'extra' }];
+  const after = plannedMealNutrition(d, meal).macros!.kcal;
+  const expected = foodMacros(pan, 40).kcal;
+  meal.portion = 1.5;
+  const extraRow = mealIngredients(d, meal).find((i) => i.extra === 'e1')!;
+  const shop = buildShoppingList(d, monday).groups.flatMap((g) => g.items).find((i) => i.key === 'pan');
+  console.log(`Alimento añadido: ${recipeTitleOf(recipe.id)} ${before.toFixed(0)} → ${after.toFixed(0)} kcal (+${expected.toFixed(0)} de 40 g de pan); con ración ×1,5 el pan sigue siendo ${(extraRow.amount * meal.portion).toFixed(0)} g; en la compra: ${shop?.qty}`);
+  if (Math.abs(after - before - expected) > 0.01) problems.push('El alimento añadido no suma bien a la comida');
+  if (Math.abs(extraRow.amount * meal.portion - 40) > 0.01) problems.push('El alimento añadido cambia al ajustar la ración');
+  if (!shop) problems.push('El alimento añadido no entra en la lista de la compra');
+  if (JSON.stringify(RECIPE_LIBRARY.find((r) => r.id === recipe.id)) !== recipeJson) problems.push('Añadir un alimento modifica la receta original');
+  // regenerar la semana no quita lo añadido a una comida aceptada
+  meal.accepted = true;
+  regenerateWeek(d, monday, monday, 'extras2');
+  if (!d.plan[monday].find((m) => m.id === meal.id)?.extras?.length) problems.push('Regenerar quita los alimentos añadidos de una comida aceptada');
+}
+
+// ---------------------------------------------------------------------------
+// Hamburguesas: alimentos y recetas
+{
+  const burgerFoods = [...foods.values()].filter((f) => /^hamburguesa_/.test(f.id));
+  const kinds = ['ternera', 'pollo', 'pavo', 'cerdo', 'cordero', 'wagyu', 'vegetal', 'mixta', 'venado', 'bisonte'];
+  const missing = kinds.filter((k) => !burgerFoods.some((f) => f.id.includes(k)));
+  const burgerRecipes = RECIPE_LIBRARY.filter((r) => /burger|hamburguesa/i.test(r.id));
+  const idx = new FoodIndex();
+  idx.add([...foods.values()], 6);
+  idx.add(OFFICIAL_FOODS, 4);
+  const found = idx.search('burger wagyu', { limit: 5 }).map((f) => f.name);
+  console.log(`\nHamburguesas: ${burgerFoods.length} alimentos (${burgerFoods.map((f) => `${f.name.replace('Hamburguesa ', '').replace(' (hecha)', '')} ${Math.round(f.per100.kcal)}`).join(', ')} kcal/100 g) · ${burgerRecipes.length} recetas · «burger wagyu» → ${found[0]}`);
+  if (missing.length) problems.push(`Faltan hamburguesas de: ${missing.join(', ')}`);
+  if (burgerRecipes.length < 20) problems.push(`Pocas recetas de hamburguesa (${burgerRecipes.length})`);
+  if (!burgerFoods.every((f) => f.source === 'usda' || (f.source === 'estimacion' && !!f.ref))) problems.push('Hamburguesa sin fuente o sin explicar la estimación');
+  if (!/wagyu/i.test(found[0] ?? '')) problems.push('Buscar «burger wagyu» no encuentra la hamburguesa de wagyu');
+  const vegan = createUserData(baseProfile({ name: 'Vegana', dietType: 'vegana' } as Partial<UserProfile>));
+  if (!candidatesFor(vegan, 'comida').some((r) => /burger/.test(r.id))) problems.push('No hay hamburguesas para perfiles veganos');
+  if (candidatesFor(vegan, 'comida').some((r) => r.ingredients.some((i) => i.foodId === 'hamburguesa_vegetal'))) problems.push('Se propone la hamburguesa vegetal (puede llevar huevo) a un perfil vegano');
 }
 
 if (RECIPE_LIBRARY.length < 500) problems.push(`Solo hay ${RECIPE_LIBRARY.length} recetas (mínimo 500)`);

@@ -168,7 +168,8 @@ export function draftFromRecipe(r: Recipe): DishDraft {
     minutes: r.minutes || null,
     steps: r.steps.join('\n'),
     imageUrl: r.imageUrl,
-    items: (r.dish?.items ?? r.ingredients.map((i) => ({ foodId: i.foodId, quantity: i.amount * r.servings, unit: 'g' as QtyUnit }))).map((i) => ({ ...i })),
+    // recetas de la biblioteca: cantidades por ración × raciones, en la unidad del alimento (g o ml)
+    items: (r.dish?.items ?? r.ingredients.map((i) => ({ foodId: i.foodId, quantity: Math.round(i.amount * r.servings * 10) / 10, unit: (getFood({ customFoods: [] }, i.foodId)?.unit ?? 'g') as QtyUnit }))).map((i) => ({ ...i })),
   };
 }
 

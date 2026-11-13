@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeftRight, CalendarPlus, Check, ChevronDown, Clock, Copy, Heart, Info, PencilLine, RotateCcw, Trash2, UtensilsCrossed, Users } from 'lucide-react';
+import { ArrowLeftRight, CalendarPlus, Check, ChevronDown, Clock, Copy, Heart, Info, PencilLine, Plus, RotateCcw, Search, Trash2, UtensilsCrossed, Users } from 'lucide-react';
 import { MoreMenu } from '../../components/ui/Menu';
 import { useFeedback } from '../../components/ui/Feedback';
 import { deleteDish, duplicateDish, unitSize } from '../../services/dishes';
-import { QuantityEditor, amountLabel, qtyFromBase, qtyToBase, type QtyValue } from './QuantityEditor';
+import { QuantityEditor, amountLabel, fmtQty, qtyFromBase, qtyToBase, type QtyValue } from './QuantityEditor';
+import { defaultQuantity } from '../../services/dishes';
+import { useFoodSearch } from '../log/useFoodSearch';
+import { FoodRow } from '../log/LogFoodSheet';
 import { todayISO } from '../../lib/dates';
 import type { Food, PlannedMeal, Recipe } from '../../types';
 import { Sheet } from '../../components/ui/Sheet';
@@ -29,10 +32,12 @@ interface Props {
   onAddToPlan?: () => void;
   /** Mis platos: editar y registrar en Hoy */
   onEditDish?: (r: Recipe) => void;
+  /** Biblioteca: crear una copia en Mis platos para añadirle alimentos (la receta no cambia) */
+  onCustomize?: (r: Recipe) => void;
   onLogDish?: (r: Recipe) => void;
 }
 
-export function RecipeSheet({ recipe, open, onClose, meal, onSwap, onAddToPlan, onEditDish, onLogDish }: Props) {
+export function RecipeSheet({ recipe, open, onClose, meal, onSwap, onAddToPlan, onEditDish, onLogDish, onCustomize }: Props) {
   const data = useData();
   const { mutate } = useStore();
   const actions = useMealActions();
@@ -41,6 +46,8 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap, onAddToPlan, 
   const [whole, setWhole] = useState(false);
   // al restablecer una cantidad se vuelve a montar su editor con el valor de la receta
   const [qtyResets, setQtyResets] = useState(0);
+  const [adding, setAdding] = useState(false);
+  useEffect(() => setAdding(false), [meal?.id, open]);
   useEffect(() => setWhole(false), [recipe?.id, open]);
 
   if (!recipe) return null;
@@ -198,7 +205,8 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap, onAddToPlan, 
       </div>
       <ul className="divide-y divide-line/70 overflow-hidden rounded-[16px] bg-surface2/60 ring-1 ring-line/60">
         {rows.map((ing) => {
-          const key = ing.replaces ?? ing.foodId;
+          const key = ing.extra ? `extra:${ing.extra}` : ing.replaces ?? ing.foodId;
+          const isExtra = !!ing.extra;
           if (ing.removed) {
             const rf = getFood(data, ing.foodId);
             return (
@@ -240,6 +248,7 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap, onAddToPlan, 
                 <span className="min-w-0 flex-1">
                   <span className="block text-[15px] font-medium">{f?.name ?? ing.foodId}</span>
                   {orig && <span className="block text-[12px] font-medium text-accent-deep">Sustituye a {orig.name.toLowerCase()}</span>}
+                  {isExtra && <span className="block text-[12px] font-medium text-accent-deep" data-extra-kind={ing.dessert ? 'postre' : 'extra'}>{ing.dessert ? 'Postre' : 'Añadido por ti'}</span>}
                   {f && <span className="tabular block text-[12px] text-ink3">{n0(foodMacros(f, amount).kcal)} kcal</span>}
                 </span>
                 {ing.original !== undefined && !orig && <span className="sr-only">Cantidad cambiada en esta comida</span>}
@@ -254,7 +263,12 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap, onAddToPlan, 
                   {editable && f && (
                     <div className="mb-3" data-ingredient-qty={key}>
                       <p className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-ink3">Cantidad en esta comida</p>
-                      <IngredientQty key={`${f.id}-${qtyResets}`} food={f} amount={amount} onCommit={(b) => actions.setIngredientAmount(meal!, key, f.id, b / qty)} />
+                      <IngredientQty
+                        key={`${f.id}-${qtyResets}`}
+                        food={f}
+                        amount={amount}
+                        onCommit={(b) => (isExtra ? actions.updateExtra(meal!, ing.extra!, { amount: b }) : actions.setIngredientAmount(meal!, key, f.id, b / qty))}
+                      />
                       {ing.original !== undefined && (
                         <p className="mt-1.5 flex flex-wrap items-center gap-x-2 text-[13px] text-ink3" data-original-amount>
                           Receta original: {amountLabel(f, ing.original * qty)}
@@ -300,7 +314,8 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap, onAddToPlan, 
                                 data-equivalence={e.food.id}
                                 className="flex min-h-[44px] w-full items-center gap-2 rounded-[10px] bg-surface2 px-3 py-1.5 text-left text-[14px] ring-accent/40 transition hover:bg-accentSoft focus-visible:ring-2 active:scale-[0.99]"
                                 onClick={() => {
-                                  actions.swapIngredient(meal!, key, { foodId: e.food.id, amount: e.amount }, { from: f?.name ?? key, to: e.food.name });
+                                  if (isExtra) actions.updateExtra(meal!, ing.extra!, { foodId: e.food.id, amount: e.amount * qty });
+                                  else actions.swapIngredient(meal!, key, { foodId: e.food.id, amount: e.amount }, { from: f?.name ?? key, to: e.food.name });
                                   setOpenIng(null);
                                 }}
                               >
@@ -313,7 +328,20 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap, onAddToPlan, 
                     </>
                   )}
                   {editable && !eq?.items.length && <p className="pb-1 text-[13px] text-ink3">No hay equivalencias en la base para este alimento.</p>}
-                  {editable && !orig && ingredients.length > 1 && (
+                  {editable && isExtra && (
+                    <button
+                      type="button"
+                      data-remove-extra={ing.extra}
+                      className="mt-2 flex min-h-[44px] w-full items-center gap-2 rounded-[10px] px-3 text-left text-[14px] font-semibold text-danger hover:bg-surface2"
+                      onClick={() => {
+                        actions.removeExtra(meal!, ing.extra!, f?.name ?? 'Alimento');
+                        setOpenIng(null);
+                      }}
+                    >
+                      <Trash2 size={16} /> Quitar de esta comida
+                    </button>
+                  )}
+                  {editable && !isExtra && !orig && ingredients.filter((i) => !i.extra).length > 1 && (
                     <button
                       type="button"
                       data-remove={key}
@@ -345,10 +373,37 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap, onAddToPlan, 
           );
         })}
       </ul>
+      {editable && (
+        adding ? (
+          <AddFoodPanel
+            onCancel={() => setAdding(false)}
+            onAdd={(food, amount) => {
+              actions.addExtra(meal!, food.id, amount, food.name);
+              setAdding(false);
+            }}
+          />
+        ) : (
+          <Button variant="tinted" className="mt-2 w-full" icon={<Plus size={18} />} onClick={() => setAdding(true)} data-add-extra>
+            Añadir alimento
+          </Button>
+        )
+      )}
+      {!meal && !mine && onCustomize && (
+        <Button variant="tinted" className="mt-2 w-full" icon={<Plus size={18} />} onClick={() => onCustomize(recipe)} data-customize-recipe>
+          Añadir alimentos (crear mi versión)
+        </Button>
+      )}
+      {!meal && mine && onEditDish && (
+        <Button variant="tinted" className="mt-2 w-full" icon={<Plus size={18} />} onClick={() => onEditDish(recipe)} data-add-ingredient-dish>
+          Añadir ingredientes
+        </Button>
+      )}
       <p className="mt-1.5 px-1 text-[12px] text-ink3">
         {editable
-          ? 'Toca un ingrediente para cambiar su cantidad (en unidades o gramos) o sustituirlo solo en esta comida. La receta original no cambia; los valores y la lista de la compra se actualizan.'
-          : 'Toca un ingrediente para ver con qué puedes intercambiarlo. Para cambiarlo, abre la receta desde una comida de tu plan.'}
+          ? 'Toca un ingrediente para cambiar su cantidad (en unidades o gramos) o sustituirlo solo en esta comida, o añade otro alimento (pan, fruta, postre…). La receta original no cambia; los valores y la lista de la compra se actualizan.'
+          : mine
+            ? 'Toca un ingrediente para ver con qué puedes intercambiarlo. Para añadir o cambiar ingredientes, edita el plato.'
+            : 'Toca un ingrediente para ver con qué puedes intercambiarlo. La receta de la biblioteca no se modifica: para añadir alimentos se crea tu versión en Mis platos, o añádelos en una comida de tu plan.'}
       </p>
 
       <h3 className="mb-2 mt-6 text-[17px] font-bold">Alérgenos</h3>
@@ -396,5 +451,65 @@ function IngredientQty({ food, amount, onCommit }: { food: Food; amount: number;
         if (b !== null) onCommit(b);
       }}
     />
+  );
+}
+
+/**
+ * Añadir un alimento a esta comida: buscador del catálogo genérico (kcal por 100 g/ml en cada
+ * resultado) y, al elegir, cantidad en unidades o gramos con sus valores energéticos.
+ */
+function AddFoodPanel({ onAdd, onCancel }: { onAdd: (food: Food, amount: number) => void; onCancel: () => void }) {
+  const data = useData();
+  const [q, setQ] = useState('');
+  const [food, setFood] = useState<Food | null>(null);
+  const [v, setV] = useState<QtyValue>({ text: '100', unit: 'g' });
+  const results = useFoodSearch(data, q).local.slice(0, 8);
+  const base = food ? qtyToBase(food, v) : null;
+  const m = food && base !== null ? foodMacros(food, base) : null;
+  return (
+    <div className="anim-fade mt-2 rounded-[16px] bg-surface2/60 p-3 ring-1 ring-line/60" data-add-food-panel>
+      {!food ? (
+        <>
+          <label className="flex h-11 items-center gap-2 rounded-[12px] bg-surface px-3 ring-1 ring-line/70 focus-within:ring-2 focus-within:ring-accent">
+            <Search size={18} className="text-ink3" aria-hidden="true" />
+            <span className="sr-only">Buscar alimento para añadir</span>
+            <input
+              autoFocus
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Pan, plátano, yogur, queso…"
+              className="h-full w-full bg-transparent text-[16px] placeholder:text-ink3 focus:outline-none"
+              type="search"
+              enterKeyHint="search"
+              data-add-food-search
+            />
+          </label>
+          {q.trim() && (
+            <ul className="mt-1 divide-y divide-line/60">
+              {results.length ? results.map((f) => (
+                <FoodRow key={f.id} food={f} onClick={() => { const d = defaultQuantity(f); setV({ text: fmtQty(d.quantity), unit: d.unit }); setFood(f); }} />
+              )) : <li className="py-3 text-[14px] text-ink3">Sin resultados.</li>}
+            </ul>
+          )}
+          <Button variant="secondary" size="sm" className="mt-2" onClick={onCancel}>Cancelar</Button>
+        </>
+      ) : (
+        <>
+          <p className="mb-2 text-[16px] font-semibold">{food.name}</p>
+          <QuantityEditor food={food} value={v} onChange={setV} onEnter={() => base !== null && onAdd(food, base)} autoFocus />
+          {m && (
+            <p className="tabular mt-1.5 text-[13px] text-ink2" data-add-food-macros>
+              Proteínas <span className="font-semibold text-ink">{n1(m.protein)} g</span> · Hidratos <span className="font-semibold text-ink">{n1(m.carbs)} g</span> · Grasas <span className="font-semibold text-ink">{n1(m.fat)} g</span>
+            </p>
+          )}
+          <div className="mt-3 flex gap-2">
+            <Button variant="secondary" className="flex-1" onClick={() => setFood(null)}>Volver</Button>
+            <Button className="flex-[1.4]" disabled={base === null} onClick={() => base !== null && onAdd(food, base)} data-confirm-add-extra>
+              Añadir{m ? ` · ${n0(m.kcal)} kcal` : ''}
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }

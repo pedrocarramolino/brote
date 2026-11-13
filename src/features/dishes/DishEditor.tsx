@@ -21,13 +21,15 @@ import { useFoodSearch } from '../log/useFoodSearch';
  * «Crear mi plato»: nombre, ingredientes con cantidad y unidad, raciones y resumen
  * nutricional en tiempo real. Sirve también para editar un plato guardado.
  */
-export function DishEditor({ open, onClose, recipe, onSaved, initialName }: {
+export function DishEditor({ open, onClose, recipe, onSaved, initialName, template }: {
   open: boolean;
   onClose: () => void;
   recipe?: Recipe | null;
   onSaved?: (id: string) => void;
   /** nombre propuesto al crear un plato nuevo (p. ej. lo escrito en el buscador) */
   initialName?: string;
+  /** receta de la biblioteca de la que partir: se crea un plato NUEVO («mi versión»); la receta no cambia */
+  template?: Recipe | null;
 }) {
   const data = useData();
   const { mutate } = useStore();
@@ -44,7 +46,11 @@ export function DishEditor({ open, onClose, recipe, onSaved, initialName }: {
 
   useEffect(() => {
     if (!open) return;
-    const d = recipe ? draftFromRecipe(recipe) : { ...emptyDraft(), name: initialName?.slice(0, 80) ?? '' };
+    const d = recipe
+      ? draftFromRecipe(recipe)
+      : template
+        ? { ...draftFromRecipe(template), id: undefined, name: `${template.title ?? template.name} (mi versión)`.slice(0, 80), imageUrl: undefined }
+        : { ...emptyDraft(), name: initialName?.slice(0, 80) ?? '' };
     setDraft(d);
     setQtyText(d.items.map((i) => fmt(i.quantity)));
     setInitial(JSON.stringify(d));
@@ -54,7 +60,7 @@ export function DishEditor({ open, onClose, recipe, onSaved, initialName }: {
     setShowErrors(false);
     setPhotoError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, recipe?.id]);
+  }, [open, recipe?.id, template?.id]);
 
   const nutrition = useMemo(() => dishNutrition(data, draft.items, draft.servings), [data, draft.items, draft.servings]);
   const errors = validateDraft(data, draft);
@@ -142,7 +148,7 @@ export function DishEditor({ open, onClose, recipe, onSaved, initialName }: {
       open={open}
       onClose={close}
       size="lg"
-      title={view === 'pick' ? (replacing !== null ? 'Sustituir ingrediente' : 'Añadir ingrediente') : view === 'newfood' ? 'Nuevo alimento' : recipe ? 'Editar plato' : 'Crear mi plato'}
+      title={view === 'pick' ? (replacing !== null ? 'Sustituir ingrediente' : 'Añadir ingrediente') : view === 'newfood' ? 'Nuevo alimento' : recipe ? 'Editar plato' : template ? 'Mi versión' : 'Crear mi plato'}
       subtitle={view === 'form' ? 'Ingredientes y cantidades del plato completo' : undefined}
       footer={
         view === 'form' ? (

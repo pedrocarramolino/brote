@@ -14,7 +14,7 @@ Alimentos ───────────────────────�
   foodDb/official.json     ~780 más de BEDCA (AESAN) y USDA (catálogo genérico)  │
   AppData.customFoods      alimentos creados por el usuario (sin marcas)         │
                                                                                  ▼
-Biblioteca (src/data/recipeLibrary, 672 recetas) ─┐
+Biblioteca (src/data/recipeLibrary, 690 recetas) ─┐
 Mis platos (AppData.customRecipes, custom: true) ─┼─► Recetas ─► Plan semanal (AppData.plan) ─► Registro diario (AppData.log)
                                                    └──────────────────────────────┴─► Lista de la compra (services/shopping.ts)
 ```
@@ -69,6 +69,18 @@ Cualquier alimento consumido se edita sin borrarlo y volver a añadirlo, en unid
 - **Mis platos** (`DishEditor`): campo de texto + unidad, ahora con −/+ y conversión al cambiar de unidad. Las raciones de un plato registrado se siguen editando en el registro.
 - **Recálculo**: todo sale de `foodMacros`, así que kcal, proteínas, hidratos, grasas y fibra de la comida, del día y del plan se actualizan solos.
 
+## Alimentos añadidos a una comida y postres
+
+- **Modelo**: `PlannedMeal.extras: MealExtra[]` (`{ id, foodId, amount, kind: 'extra' | 'postre' }`). `amount` son los g/ml que se comen, **no por ración**: `mealIngredients` los devuelve como `amount / meal.portion` (marcados con `extra` y `dessert`) para que nutrición, lista de la compra, fibra y valores congelados funcionen sin código aparte y la cantidad no cambie al ajustar la ración. La receta no se modifica nunca.
+- **Interfaz** (ficha de una comida del plan, desde Plan u Hoy): botón «Añadir alimento» bajo los ingredientes → buscador del catálogo (cada resultado con sus kcal por 100 g/ml) → cantidad con `QuantityEditor` y sus proteínas, hidratos y grasas → «Añadir · N kcal». Las filas añadidas muestran «Añadido por ti» o «Postre», se pueden cambiar de cantidad, sustituir por una equivalencia o quitar (con deshacer). Las tarjetas de Plan y Hoy muestran «Postre: manzana · + pan integral». Acciones: `addExtra`, `updateExtra`, `removeExtra` (`useMealActions`); al tocar lo añadido la comida queda aceptada, así «Otra propuesta» no la cambia.
+- **Recetas de la biblioteca**: no se pueden modificar. «Añadir alimentos (crear mi versión)» abre el creador de platos con sus ingredientes (`DishEditor` con `template`) para guardar una copia en Mis platos; en un plato propio, «Añadir ingredientes» abre su edición.
+- **Postres en el plan** (`planner.ts`, `DESSERTS`): en torno a la mitad de comidas y cenas llevan un postre: fruta de temporada (meses en España: naranja y mandarina en invierno, fresas en primavera, sandía, melón y melocotón en verano, uvas, granada y caqui en otoño…; manzana, pera, plátano, kiwi y piña todo el año) y, a veces, yogur natural o griego. Se eligen con un generador aleatorio propio (no altera la elección de recetas), sin repetir en el día, rotando en la semana y sin alimentos que choquen con alergias, dieta o «no me gusta». No se pone si el plato ya lleva fruta. La ración del plato se ajusta para dejar sitio al postre; si no cabe en la energía de esa comida, no se pone.
+
+## Hamburguesas
+
+- **Alimentos** (peso ya hecha; 1 unidad = 100 g hecha ≈ 130 g en crudo; la empanada y la vegetal, 90 g): ternera 80/20, magra 90/10, extramagra 95/5, vacuno 85/15, 75/25 y 70/30, pollo, pollo empanada, pavo, pavo extramagro, cerdo, cordero, venado y bisonte con valores de USDA SR Legacy; vegetal de soja y cereales (USDA 169888; puede llevar huevo, así que no se propone a veganos). **Estimaciones** (`source: 'estimacion'`, cálculo en `ref`): wagyu ≈ 307 kcal/100 g (vacuno 70/30 hecho de USDA con la proporción grasa/proteína del wagyu de marmoleo alto; entre 230 y 310 según el marmoleo) y mixta de ternera y cerdo (media de dos valores USDA). También: pan de hamburguesa (BEDCA 2174), wagyu crudo (USDA 171740) y champiñón portobello (USDA 169255). El buscador entiende «burger».
+- **Recetas** (`recipeLibrary/v4/hamburguesas.ts`, 18 nuevas, 26 en total con las anteriores): clásica, doble cheese, fit, wagyu, pollo mediterránea y crujiente, BBQ de cerdo, mixta con piquillos, venado con setas, bisonte, salmón, atún, portobello caprese, vegetal de soja, veganas de lentejas y de quinoa y alubias, pavo ligera y hamburguesa al plato sin pan.
+
 ## Hojas modales y foco (corrección)
 
 `components/ui/Sheet.tsx` guarda `onClose` en una referencia y su efecto de foco depende solo de `open`. Antes dependía también de `onClose`: las páginas pasan funciones nuevas en cada render, así que cada pulsación volvía a ejecutar el efecto, que movía el foco al panel. El campo perdía el foco y el teclado del iPhone se cerraba tras cada número. Afectaba a todas las hojas con campos de texto. Para evitar que vuelva a pasar, cualquier efecto de una hoja que mueva el foco debe depender solo de `open`.
@@ -86,18 +98,18 @@ Cualquier alimento consumido se edita sin borrarlo y volver a añadirlo, en unid
 
 ## Biblioteca de recetas
 
-672 recetas: 130 desayunos, 180 comidas, 133 cenas, 79 meriendas, 66 de media mañana, 46 snacks y 38 postres. Las 145 de `recipeLibrary/v4/` usan los alimentos incorporados: quesos (manchego, cheddar, gouda, brie, roquefort, cabrales, provolone, ricotta, tetilla…), cordero, conejo, costillas, embutidos, lenguado, besugo, rodaballo, salmonete, berberechos, zamburiñas, vieiras, legumbres secas, bebidas vegetales y proteína en polvo. Cada ingrediente es un `foodId` de la base: la nutrición se calcula, nunca se escribe a mano. 609 recetas se calculan al 100 % con datos de BEDCA/USDA y el resto incluye algún alimento estimado. Ninguna receta usa productos de marca. El planificador penaliza repetir recetas de las 4 semanas anteriores (−30 − 10 × reciente) y avisa cuando una franja tiene menos de 35 recetas compatibles.
+690 recetas: 130 desayunos, 196 comidas, 135 cenas, 79 meriendas, 66 de media mañana, 46 snacks y 38 postres. Las 145 de `recipeLibrary/v4/` usan los alimentos incorporados: quesos (manchego, cheddar, gouda, brie, roquefort, cabrales, provolone, ricotta, tetilla…), cordero, conejo, costillas, embutidos, lenguado, besugo, rodaballo, salmonete, berberechos, zamburiñas, vieiras, legumbres secas, bebidas vegetales y proteína en polvo. Cada ingrediente es un `foodId` de la base: la nutrición se calcula, nunca se escribe a mano. 609 recetas se calculan al 100 % con datos de BEDCA/USDA y el resto incluye algún alimento estimado. Ninguna receta usa productos de marca. El planificador penaliza repetir recetas de las 4 semanas anteriores (−30 − 10 × reciente) y avisa cuando una franja tiene menos de 35 recetas compatibles.
 
 ## Pruebas
 
-- `npm run check:library`: integridad de la biblioteca, simulación del planificador, sustituciones, lista de la compra y comida libre.
+- `npm run check:library`: integridad de la biblioteca, simulación del planificador, sustituciones, lista de la compra, comida libre, postres (proporción, temporada en noviembre y julio, variedad, energía del día, sin lactosa para alérgicos), alimento añadido (suma, compra, no escala con la ración, receta intacta, se conserva al regenerar) y hamburguesas (todos los tipos, fuente o estimación explicada, búsqueda, opciones veganas).
 - `npm run check:dishes`: 18 comprobaciones de Mis platos (un ingrediente, cinco, cambio de cantidad, borrar ingrediente, raciones, unidades, guardar, persistencia JSON, menú semanal y compra, registrar 1 y ½ ración, suma del día, borrar consumo, editar, historial intacto, duplicar, borrar plato, datos incompletos).
 - `npm run check:foods`: cantidad y variedad por grupo, ids y nombres únicos, equivalentes agrupados, ningún alimento con marca, variedades conservadas, todas las recetas encuentran sus alimentos, buscador («leche», «queso», «mozarela», «yogurt griego», buscar una marca no da marcas), migración de marcas a genérico (platos, registros, favoritos, lo comido no cambia, sin equivalente se conserva), cantidades (kiwi 1/2/½, huevos, medio plátano, g y ml, sin equivalencias inventadas, cambio unidad ⇄ gramos, valores no válidos), comida del plan con cantidad cambiada (recalcula, total del día, receta original intacta) y registro 2 → 1 kiwi.
 - `npm run typecheck` y `npm run build`.
 
 ## Pendiente
 
-- Cuentas y sincronización con Supabase (migraciones 0001–0005 preparadas).
+- Cuentas y sincronización con Supabase (migraciones 0001–0006 preparadas).
 - Fotos reales para la biblioteca (ahora portadas ilustradas, marcadas como tales).
 - Si Brote pasa a ser comercial: solicitar autorización a AESAN para BEDCA (o sustituirla por USDA).
 - Equivalentes oficiales para los 13 alimentos que conservan un valor estimado.

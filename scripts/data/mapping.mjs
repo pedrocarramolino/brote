@@ -164,6 +164,26 @@ export const CURATED_NEW = [
   ['cacao_soluble', 'Cacao soluble azucarado', 'b:2648', 'g', 'otros', [], ['1 cucharada', 10], []],
   ['proteina_whey', 'Proteína de suero en polvo', 'u:173180', 'g', 'otros', ['lactosa'], ['1 cacito', 30], ['animal', 'lacteo']],
   ['proteina_soja', 'Proteína de soja en polvo', 'u:173181', 'g', 'otros', ['soja'], ['1 cacito', 30], []],
+  // hamburguesas (peso ya hecha: 1 unidad ≈ 100 g hecha, unos 130 g en crudo) y pan
+  ['hamburguesa_ternera', 'Hamburguesa de ternera 80/20 (hecha)', 'u:171797', 'g', 'proteinas', [], ['1 unidad', 100], ['animal', 'carne']],
+  ['hamburguesa_ternera_magra', 'Hamburguesa de ternera magra 90/10 (hecha)', 'u:174031', 'g', 'proteinas', [], ['1 unidad', 100], ['animal', 'carne']],
+  ['hamburguesa_ternera_extramagra', 'Hamburguesa de ternera extramagra 95/5 (hecha)', 'u:171791', 'g', 'proteinas', [], ['1 unidad', 100], ['animal', 'carne']],
+  ['hamburguesa_vacuno_85', 'Hamburguesa de vacuno 85/15 (hecha)', 'u:174032', 'g', 'proteinas', [], ['1 unidad', 100], ['animal', 'carne']],
+  ['hamburguesa_vacuno_75', 'Hamburguesa de vacuno 75/25 (hecha)', 'u:174038', 'g', 'proteinas', [], ['1 unidad', 100], ['animal', 'carne']],
+  ['hamburguesa_vacuno_70', 'Hamburguesa de vacuno 70/30 (hecha)', 'u:168651', 'g', 'proteinas', [], ['1 unidad', 100], ['animal', 'carne']],
+  ['hamburguesa_pollo', 'Hamburguesa de pollo (hecha)', 'u:171117', 'g', 'proteinas', [], ['1 unidad', 100], ['animal', 'carne']],
+  ['hamburguesa_pollo_empanada', 'Hamburguesa de pollo empanada (hecha)', 'u:171513', 'g', 'proteinas', ['gluten'], ['1 unidad', 90], ['animal', 'carne']],
+  ['hamburguesa_pavo', 'Hamburguesa de pavo (hecha)', 'u:171506', 'g', 'proteinas', [], ['1 unidad', 100], ['animal', 'carne']],
+  ['hamburguesa_pavo_magra', 'Hamburguesa de pavo extramagra (hecha)', 'u:172849', 'g', 'proteinas', [], ['1 unidad', 100], ['animal', 'carne']],
+  ['hamburguesa_cerdo', 'Hamburguesa de cerdo (hecha)', 'u:168374', 'g', 'proteinas', [], ['1 unidad', 100], ['animal', 'carne']],
+  ['hamburguesa_cordero', 'Hamburguesa de cordero (hecha)', 'u:172544', 'g', 'proteinas', [], ['1 unidad', 100], ['animal', 'carne']],
+  ['hamburguesa_venado', 'Hamburguesa de venado (hecha)', 'u:172603', 'g', 'proteinas', [], ['1 unidad', 100], ['animal', 'carne']],
+  ['hamburguesa_bisonte', 'Hamburguesa de bisonte (hecha)', 'u:173847', 'g', 'proteinas', [], ['1 unidad', 100], ['animal', 'carne']],
+  // puede llevar huevo o lácteos (receta USDA genérica): apta para vegetarianos, no se propone a veganos
+  ['hamburguesa_vegetal', 'Hamburguesa vegetal de soja y cereales', 'u:169888', 'g', 'proteinas', ['soja', 'gluten', 'huevo'], ['1 unidad', 90], ['animal', 'huevo']],
+  ['wagyu', 'Wagyu, costillar, carne y grasa, crudo', 'u:171740', 'g', 'proteinas', [], ['1 ración', 150], ['animal', 'carne']],
+  ['portobello', 'Champiñón portobello', 'u:169255', 'g', 'verduras', [], ['1 unidad', 85], []],
+  ['pan_burger', 'Pan de hamburguesa', 'b:2174', 'g', 'cereales', ['gluten'], ['1 unidad', 70], []],
 ];
 
 /**

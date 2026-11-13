@@ -1,8 +1,8 @@
-import type { AppData, ISODate, MainIngredient, MealReplacement, MealSlot, PlannedMeal, Recipe } from '../types';
+import type { AppData, ISODate, MainIngredient, MealExtra, MealReplacement, MealSlot, PlannedMeal, Recipe } from '../types';
 import { addDays, weekDates } from '../lib/dates';
 import { normalize, uid } from '../lib/format';
 import { ALL_SLOTS, allRecipes, getFood, getRecipe } from './catalog';
-import { recipeFit, recipeNutrition } from './nutrition';
+import { conflictingFoods, foodMacros, recipeFit, recipeNutrition } from './nutrition';
 
 /** Recetas candidatas para un tipo de comida según el perfil (dieta, alergias, alimentos que no gustan y tiempo). */
 export function candidatesFor(data: AppData, slot: MealSlot): Recipe[] {
@@ -23,6 +23,24 @@ const SLOT_SHARE: Record<MealSlot, number> = { desayuno: 0.22, mediamanana: 0.1,
 const ANIMAL_MAIN = new Set<MainIngredient>(['pollo', 'pavo', 'ternera', 'cerdo', 'pescado_blanco', 'pescado_azul', 'atun', 'marisco']);
 const FISH = new Set<MainIngredient>(['pescado_blanco', 'pescado_azul', 'atun', 'marisco']);
 const RED_MEAT = new Set<MainIngredient>(['ternera', 'cerdo']);
+
+/**
+ * Postres del plan: fruta de temporada (meses en los que se propone) y, a veces, un lácteo.
+ * Se añaden como `extras` de la comida (kind 'postre'): la receta no cambia y el usuario
+ * puede cambiarlos, ajustar la cantidad o quitarlos.
+ */
+const DESSERTS: { foodId: string; months?: number[]; weight?: number }[] = [
+  { foodId: 'manzana' }, { foodId: 'pera' }, { foodId: 'platano' }, { foodId: 'kiwi' }, { foodId: 'pina' },
+  { foodId: 'naranja', months: [10, 11, 12, 1, 2, 3, 4, 5] }, { foodId: 'mandarina', months: [10, 11, 12, 1, 2, 3] },
+  { foodId: 'fresas', months: [2, 3, 4, 5, 6] }, { foodId: 'cerezas', months: [5, 6, 7] }, { foodId: 'albaricoque', months: [5, 6, 7] },
+  { foodId: 'melocoton', months: [6, 7, 8, 9] }, { foodId: 'ciruela', months: [6, 7, 8, 9] }, { foodId: 'sandia', months: [6, 7, 8, 9] },
+  { foodId: 'melon', months: [6, 7, 8, 9] }, { foodId: 'higos', months: [8, 9] }, { foodId: 'uvas', months: [8, 9, 10, 11] },
+  { foodId: 'granada', months: [9, 10, 11, 12] }, { foodId: 'caqui', months: [10, 11, 12] },
+  { foodId: 'yogur', weight: 0.5 }, { foodId: 'yogur_griego', weight: 0.4 },
+];
+/** Proporción aproximada de comidas y cenas con postre. */
+const DESSERT_RATE = 0.5;
+const FRUIT_IDS = new Set(DESSERTS.filter((x) => !x.weight).map((x) => x.foodId).concat(['frutos_rojos', 'frambuesas', 'mango']));
 
 function seeded(seed: string) {
   let a = 2166136261;
@@ -123,6 +141,28 @@ export interface GenerateOptions {
  */
 export function generateWeek(data: AppData, monday: ISODate, opts: GenerateOptions = {}): PlannedMeal[] {
   const rand = seeded(`${monday}|${data.profile.id}|${opts.seed ?? ''}`);
+  // generador aparte para los postres: no altera la elección de recetas
+  const drand = seeded(`${monday}|${data.profile.id}|${opts.seed ?? ''}|postre`);
+  const dessertUse = new Map<string, number>();
+  for (const m of opts.keep ?? []) for (const e of m.extras ?? []) if (e.kind === 'postre') dessertUse.set(e.foodId, (dessertUse.get(e.foodId) ?? 0) + 1);
+  const dessertFoods = DESSERTS.filter((x) => getFood(data, x.foodId) && !conflictingFoods(data, [{ foodId: x.foodId }], data.profile).length);
+  /** postre para una comida principal, o null (no toca, o no cabe en la energía de la comida) */
+  const pickDessert = (date: ISODate, r: Recipe): MealExtra | null => {
+    if (drand() >= DESSERT_RATE || r.category === 'postre') return null;
+    // si el plato ya lleva fruta, no se repite como postre
+    if (r.ingredients.some((i) => FRUIT_IDS.has(i.foodId) && i.amount >= 60)) return null;
+    const month = Number(date.slice(5, 7));
+    const sameDay = new Set(out.filter((m) => m.date === date).flatMap((m) => (m.extras ?? []).map((e) => e.foodId)));
+    let best: { id: string; score: number } | null = null;
+    for (const d of dessertFoods) {
+      if (d.months && !d.months.includes(month)) continue;
+      const score = drand() * (d.weight ?? 1) * 3 - (dessertUse.get(d.foodId) ?? 0) * 2 - (sameDay.has(d.foodId) ? 10 : 0);
+      if (!best || score > best.score) best = { id: d.foodId, score };
+    }
+    const f = best && getFood(data, best.id);
+    if (!f) return null;
+    return { id: uid('ex'), foodId: f.id, amount: f.portion?.amount ?? 120, kind: 'postre' };
+  };
   const slots = ALL_SLOTS.filter((s) => data.profile.mealSlots.includes(s));
   const shareTotal = slots.reduce((a, s) => a + SLOT_SHARE[s], 0) || 1;
   const kcalTarget = data.profile.targets?.kcal;
@@ -247,8 +287,14 @@ export function generateWeek(data: AppData, monday: ISODate, opts: GenerateOptio
       const r = best.r;
       let portion = 1;
       const kcal = getInfo(r).kcal;
-      if (target && kcal > 0) portion = Math.min(1.5, Math.max(0.75, Math.round((target / kcal) * 4) / 4));
-      register({ id: uid('pm'), date, slot, recipeId: r.id, portion, status: 'pendiente' });
+      // postre en algunas comidas y cenas: la ración del plato se ajusta para dejarle sitio
+      let dessert = isMain(slot) ? pickDessert(date, r) : null;
+      const dk = dessert ? foodMacros(getFood(data, dessert.foodId)!, dessert.amount).kcal : 0;
+      if (dessert && target && kcal > 0 && (target - dk) / kcal < 0.75) dessert = null;
+      const room = target ? target - (dessert ? dk : 0) : null;
+      if (room && kcal > 0) portion = Math.min(1.5, Math.max(0.75, Math.round((room / kcal) * 4) / 4));
+      if (dessert) dessertUse.set(dessert.foodId, (dessertUse.get(dessert.foodId) ?? 0) + 1);
+      register({ id: uid('pm'), date, slot, recipeId: r.id, portion, status: 'pendiente', ...(dessert ? { extras: [dessert] } : {}) });
     }
   });
   return out.filter((m) => !keep.includes(m)).concat(keep).sort(ordered);

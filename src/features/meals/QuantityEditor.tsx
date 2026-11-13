@@ -60,12 +60,14 @@ export function qtyLabel(quantity: number, unit: QtyUnit): string {
   }
 }
 
-/** Cantidad legible en g/ml con su equivalencia en unidades cuando la base la tiene: «2 ud. · 150 g». */
+/** Cantidad legible en g/ml con su equivalencia en unidades cuando la base la tiene y es redonda: «2 ud. · 150 g». */
 export function amountLabel(food: Food | undefined, base: number): string {
   if (!food) return `${n0(base)} g`;
   const u = unitSize(food);
-  if (!u) return `${n0(base)} ${food.unit}`;
-  return `${fmtQty(base / u)} ud. · ${n0(base)} ${food.unit}`;
+  const pieces = u ? base / u : 0;
+  // solo cuando son piezas «redondas» (½, 1, 1½, 2…): «0,36 ud.» no ayuda
+  if (!u || pieces < 0.5 || Math.abs(pieces * 2 - Math.round(pieces * 2)) > 0.04) return `${n0(base)} ${food.unit}`;
+  return `${fmtQty(Math.round(pieces * 2) / 2)} ud. · ${n0(base)} ${food.unit}`;
 }
 
 const SEG_LABEL: Record<QtyUnit, string> = { g: 'g', kg: 'kg', ml: 'ml', l: 'l', unidad: 'unidades', cucharada: 'cdas.', cucharadita: 'cdtas.' };

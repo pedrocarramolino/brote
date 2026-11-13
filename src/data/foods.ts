@@ -420,6 +420,44 @@ BASE_FOODS.push(
   })),
 );
 
+/**
+ * Valores APROXIMADOS (source 'estimacion') para alimentos sin dato oficial propio, derivados de
+ * datos de USDA. Se muestran como estimación, con el cálculo en `ref`.
+ */
+BASE_FOODS.push(
+  {
+    id: 'hamburguesa_wagyu',
+    name: 'Hamburguesa de wagyu (hecha)',
+    unit: 'g',
+    per100: { kcal: 307, protein: 25, carbs: 0, fat: 23 },
+    fiber: 0,
+    category: 'proteinas',
+    allergens: [],
+    source: 'estimacion',
+    // vacuno 70/30 hecho (USDA 168651: 25,4 g proteína, 18,7 g grasa) con la proporción grasa/proteína
+    // del wagyu de marmoleo alto (USDA 171741, crudo) frente al vacuno 70/30 crudo (USDA 168652): ×1,26
+    ref: 'aprox. a partir de USDA 168651 y 171741; entre 230 y 310 kcal según el marmoleo',
+    portion: { label: '1 unidad', amount: 100 },
+    tags: ['animal', 'carne'],
+    group: 'Carnes',
+  },
+  {
+    id: 'hamburguesa_mixta',
+    name: 'Hamburguesa mixta de ternera y cerdo (hecha)',
+    unit: 'g',
+    // media de vacuno 80/20 (USDA 171797) y cerdo 84/16 (USDA 168374), hechos
+    per100: { kcal: 285.5, protein: 26.4, carbs: 0, fat: 19.6 },
+    fiber: 0,
+    category: 'proteinas',
+    allergens: [],
+    source: 'estimacion',
+    ref: 'media de USDA 171797 y 168374',
+    portion: { label: '1 unidad', amount: 100 },
+    tags: ['animal', 'carne'],
+    group: 'Carnes',
+  },
+);
+
 const usedRefs = new Set([...Object.values(CURATED.base), ...CURATED.added.map((c) => c.ref)].filter(Boolean));
 
 /**

@@ -41,6 +41,10 @@ export interface EffectiveIngredient {
   removed?: boolean;
   /** cantidad por ración de la receta original cuando el usuario la ha cambiado en esta comida */
   original?: number;
+  /** alimento añadido a esta comida (id de meal.extras); no es un ingrediente de la receta */
+  extra?: string;
+  /** el alimento añadido es un postre propuesto por el planificador */
+  dessert?: boolean;
 }
 
 /**
@@ -60,6 +64,12 @@ export function mealIngredients(data: Pick<AppData, 'customRecipes'>, meal: Plan
     if (s.foodId === i.foodId) return { foodId: i.foodId, amount: s.amount, original: i.amount };
     return { foodId: s.foodId, amount: s.amount, replaces: i.foodId };
   });
+  // alimentos añadidos: se guardan en cantidad absoluta y se devuelven «por ración» para que
+  // todos los cálculos (× meal.portion) den exactamente lo que se come
+  const k = meal.portion > 0 ? meal.portion : 1;
+  for (const e of meal.extras ?? []) {
+    if (e.amount > 0) rows.push({ foodId: e.foodId, amount: e.amount / k, extra: e.id, dessert: e.kind === 'postre' || undefined });
+  }
   return opts.includeRemoved ? rows : rows.filter((x) => !x.removed);
 }
 

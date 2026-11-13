@@ -6,7 +6,7 @@ import { Button, Card, EmptyState, IconButton, ProgressBar, SectionTitle, cx } f
 import { useData, useStore, useWeek } from '../store/AppStore';
 import { useFeedback } from '../components/ui/Feedback';
 import { acceptWeek, planDiagnostics, regenerateDay, regenerateWeek } from '../services/planner';
-import { recipeSubtitle, recipeTitle } from '../services/recipeMeta';
+import { extrasLabel, recipeSubtitle, recipeTitle } from '../services/recipeMeta';
 import { addDays, formatLong, formatWeekRange, formatWeekdayShort, fromISO, startOfWeek, todayISO, weekDates } from '../lib/dates';
 import { n0 } from '../lib/format';
 import { navigate } from '../lib/router';
@@ -172,6 +172,7 @@ export function PlanPage({ dateParam }: { dateParam: string | null }) {
                           ) : (
                             r && recipeSubtitle(r) && <span className="block truncate text-[13px] leading-snug text-ink3">{recipeSubtitle(r)}</span>
                           )}
+                          {extrasLabel(data, m) && <span className="block truncate text-[13px] font-medium leading-snug text-accent-deep" data-meal-extras>{extrasLabel(data, m)}</span>}
                           {n ? <MacroInline m={n} className="mt-0.5" /> : !m.free && <span className="mt-0.5 block text-[13px] text-warn">Sin valores verificados</span>}
                         </span>
                       </button>

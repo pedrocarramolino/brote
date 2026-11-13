@@ -21,7 +21,7 @@ const tokenize = (s: string) => normalize(s).split(/[^a-z0-9ñ%]+/).filter((t) =
 
 /** Sinónimos y variantes habituales al escribir. */
 const SYNONYMS: Record<string, string[]> = {
-  yogurt: ['yogur'], yoghurt: ['yogur'], yogures: ['yogur'], mozarella: ['mozzarella'], parmesan: ['parmesano'], jamon: ['jamon'],
+  yogurt: ['yogur'], burger: ['hamburguesa'], burgers: ['hamburguesa'], hamburguesas: ['hamburguesa'], burguer: ['hamburguesa'], hamburgesa: ['hamburguesa'], wagiu: ['wagyu'], yoghurt: ['yogur'], yogures: ['yogur'], mozarella: ['mozzarella'], parmesan: ['parmesano'], jamon: ['jamon'],
   pechuga: ['pechuga'], atun: ['atun'], bebida: ['bebida', 'leche'], leches: ['leche'], quesos: ['queso'], huevos: ['huevo'],
   garbanzo: ['garbanzos', 'garbanzo'], lenteja: ['lentejas', 'lenteja'], alubia: ['alubias', 'alubia', 'judia'], judias: ['alubias', 'judia'],
   proteina: ['proteina', 'whey'], whey: ['proteina', 'suero'], vegana: ['vegetal', 'soja', 'avena', 'almendra'], light: ['light', 'ligero', 'ligera', 'bajo', '0%'],

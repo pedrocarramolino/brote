@@ -70,7 +70,7 @@ export function RecipesPage({ params }: { params?: URLSearchParams }) {
   const [open, setOpen] = useState<Recipe | null>(null);
   const [adding, setAdding] = useState<{ recipe: Recipe; source: 'manual' | 'sorpresa' } | null>(null);
   const [surpriseOpen, setSurpriseOpen] = useState(false);
-  const [editor, setEditor] = useState<{ recipe: Recipe | null; name?: string } | null>(params?.get('nuevo') ? { recipe: null } : null);
+  const [editor, setEditor] = useState<{ recipe: Recipe | null; name?: string; template?: Recipe } | null>(params?.get('nuevo') ? { recipe: null } : null);
   const [logDish, setLogDish] = useState<Recipe | null>(null);
   const mine = useMemo(() => userDishes(data), [data]);
   const openRecipe = open ? (open.custom ? mine.find((r) => r.id === open.id) ?? null : open) : null;
@@ -420,12 +420,14 @@ export function RecipesPage({ params }: { params?: URLSearchParams }) {
         onClose={() => setOpen(null)}
         onAddToPlan={openRecipe ? () => { setAdding({ recipe: openRecipe, source: 'manual' }); setOpen(null); } : undefined}
         onEditDish={(r) => { setOpen(null); setEditor({ recipe: r }); }}
+        onCustomize={(r) => { setOpen(null); setEditor({ recipe: null, template: r }); }}
         onLogDish={openRecipe?.custom ? (r) => { setOpen(null); setLogDish(r); } : undefined}
       />
       <DishEditor
         open={!!editor}
         recipe={editor?.recipe}
         initialName={editor?.name}
+        template={editor?.template}
         onClose={() => { setEditor(null); if (params?.get('nuevo')) go('recetas'); }}
         onSaved={() => set('mine', true)}
       />

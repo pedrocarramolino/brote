@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import type { AppData, FoodLogEntry, MealSlot, PlannedMeal } from '../../types';
+import type { AppData, FoodLogEntry, MealExtra, MealSlot, PlannedMeal } from '../../types';
 import { useStore } from '../../store/AppStore';
 import { useFeedback } from '../../components/ui/Feedback';
 import { startOfWeek } from '../../lib/dates';
@@ -165,6 +165,57 @@ export function useMealActions() {
     [mutate],
   );
 
+  /**
+   * Alimentos añadidos a ESTA comida (meal.extras). La receta no cambia. Al tocarlos, la comida
+   * queda aceptada para que «Otra propuesta» no la sustituya y se pierda lo añadido.
+   */
+  const editExtras = useCallback(
+    (meal: PlannedMeal, change: (extras: MealExtra[]) => MealExtra[]) =>
+      mutate((d) => {
+        const m = findMeal(d, meal.id);
+        if (!m) return;
+        const before = mealIngredients(d, m);
+        const next = change((m.extras ?? []).map((e) => ({ ...e })));
+        if (next.length) m.extras = next;
+        else delete m.extras;
+        m.accepted = true;
+        adjustSnapshot(d, m, before);
+      }),
+    [mutate],
+  );
+
+  const addExtra = useCallback(
+    (meal: PlannedMeal, foodId: string, amount: number, name: string) => {
+      if (!(amount > 0)) return;
+      const id = uid('ex');
+      editExtras(meal, (xs) => [...xs, { id, foodId, amount, kind: 'extra' }]);
+      toast(`${name} añadido a esta comida`, { action: { label: 'Deshacer', onClick: () => editExtras(meal, (xs) => xs.filter((x) => x.id !== id)) } });
+    },
+    [editExtras, toast],
+  );
+
+  /** Cambia la cantidad (sin aviso: se llama al escribir) o el alimento de un añadido. */
+  const updateExtra = useCallback(
+    (meal: PlannedMeal, id: string, patch: { amount?: number; foodId?: string }) => {
+      if (patch.amount !== undefined && !(patch.amount > 0)) return;
+      editExtras(meal, (xs) => xs.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+    },
+    [editExtras],
+  );
+
+  const removeExtra = useCallback(
+    (meal: PlannedMeal, id: string, name: string) => {
+      const prev = meal.extras?.find((x) => x.id === id);
+      const idx = meal.extras?.findIndex((x) => x.id === id) ?? -1;
+      editExtras(meal, (xs) => xs.filter((x) => x.id !== id));
+      if (prev)
+        toast(`${name} quitado de esta comida`, {
+          action: { label: 'Deshacer', onClick: () => editExtras(meal, (xs) => { const c = [...xs]; c.splice(Math.max(0, idx), 0, prev); return c; }) },
+        });
+    },
+    [editExtras, toast],
+  );
+
   const addLog = useCallback(
     (entry: Omit<FoodLogEntry, 'id' | 'createdAt'>, silent = false) => {
       const id = uid('log');
@@ -233,5 +284,5 @@ export function useMealActions() {
     [mutate, toast],
   );
 
-  return { setFree, toggleDone, setStatus, setPortion, swap, swapIngredient, setIngredientAmount, addLog, updateLog, removeLog, addPlanned };
+  return { setFree, toggleDone, setStatus, setPortion, swap, swapIngredient, setIngredientAmount, addExtra, updateExtra, removeExtra, addLog, updateLog, removeLog, addPlanned };
 }

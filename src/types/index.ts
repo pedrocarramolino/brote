@@ -178,6 +178,15 @@ export interface NutritionSnapshot {
 
 export type MealStatus = 'pendiente' | 'hecha' | 'omitida';
 
+export interface MealExtra {
+  id: string;
+  foodId: string;
+  /** g/ml que se comen en esta comida */
+  amount: number;
+  /** 'postre': lo propuso el planificador como postre; 'extra': lo añadió el usuario */
+  kind: 'postre' | 'extra';
+}
+
 export interface PlannedMeal {
   id: string;
   date: ISODate;
@@ -193,6 +202,11 @@ export interface PlannedMeal {
    * valor = alimento equivalente y cantidad por ración. La receta del catálogo no se modifica.
    */
   swaps?: Record<string, { foodId: string; amount: number }>;
+  /**
+   * Alimentos añadidos SOLO a esta comida (pan, fruta de postre…). La cantidad es la que se
+   * come (g/ml), no por ración: no cambia al ajustar la ración del plato. La receta no se modifica.
+   */
+  extras?: MealExtra[];
   /**
    * Comida libre: el usuario se «salta» el plato del plan y come lo que quiera.
    * Se conserva recipeId para poder volver al plato. No suma calorías previstas, no entra

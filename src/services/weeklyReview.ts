@@ -94,7 +94,8 @@ export function reviewMenu(data: AppData, draft: UserProfile, today: ISODate): M
     const options: MenuDecision[] = [];
     let conflicts: string[] = [];
     if (recipe) {
-      const ings = mealIngredients(d, meal, { includeRemoved: true });
+      // solo los ingredientes de la receta: lo añadido a mano o como postre no se cambia solo
+      const ings = mealIngredients(d, meal, { includeRemoved: true }).filter((i) => !i.extra);
       const active = ings.filter((i) => !i.removed);
       const bad = conflictingFoods(d, active, draft);
       conflicts = bad.map((b) => `${getFood(d, b.foodId)?.name ?? b.foodId}: ${b.reason}`);

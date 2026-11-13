@@ -10,7 +10,7 @@ import { MoreMenu } from '../../components/ui/Menu';
 import { n0 } from '../../lib/format';
 import { FreeMealCover, MacroInline, RecipeCover } from '../meals/RecipeBits';
 import { useMealActions } from '../meals/useMealActions';
-import { recipeSubtitle, recipeTitle } from '../../services/recipeMeta';
+import { extrasLabel, recipeSubtitle, recipeTitle } from '../../services/recipeMeta';
 
 const titleOf = (r: { title?: string; name: string } | undefined) => (r ? recipeTitle(r) : undefined);
 
@@ -99,6 +99,7 @@ export function MealTimeline({ date, meals, onOpenRecipe, onSwap, onAddFood, onE
                           {titleOf(recipe) ?? meal.customName ?? 'Plato sin receta'}
                         </span>
                         {recipe && recipeSubtitle(recipe) && <span className="block truncate text-[13px] leading-snug text-ink3">{recipeSubtitle(recipe)}</span>}
+                        {extrasLabel(data, meal) && <span className="block truncate text-[13px] font-medium leading-snug text-accent-deep" data-meal-extras>{extrasLabel(data, meal)}</span>}
                         {n ? (
                           <MacroInline m={n} className="mt-0.5" />
                         ) : (
