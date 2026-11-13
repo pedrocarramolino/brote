@@ -37,7 +37,7 @@ function dayPlan(data: AppData, date: ISODate) {
     .map((m) => {
       const r = getRecipe(data, m.recipeId);
       const n = plannedMealNutrition(data, m).macros;
-      return { slot: SLOT_META[m.slot].label, dish: r?.name ?? m.customName ?? 'Sin plato', status: m.status, kcal: n ? Math.round(n.kcal) : undefined };
+      return { slot: SLOT_META[m.slot].label, dish: m.free ? 'Comida libre' : r?.name ?? m.customName ?? 'Sin plato', status: m.status, kcal: n ? Math.round(n.kcal) : undefined };
     });
 }
 

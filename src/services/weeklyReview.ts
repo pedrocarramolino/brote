@@ -77,7 +77,7 @@ export interface MealReviewItem {
 export function upcomingMeals(data: AppData, today: ISODate, slots: MealSlot[]): PlannedMeal[] {
   const monday = startOfWeek(today);
   return (data.plan[monday] ?? [])
-    .filter((m) => m.date >= today && m.status === 'pendiente' && slots.includes(m.slot))
+    .filter((m) => m.date >= today && m.status === 'pendiente' && !m.free && slots.includes(m.slot))
     .sort((a, b) => a.date.localeCompare(b.date) || ALL_SLOTS.indexOf(a.slot) - ALL_SLOTS.indexOf(b.slot));
 }
 

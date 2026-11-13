@@ -72,7 +72,7 @@ function recentUse(data: AppData, monday: ISODate): Map<string, number> {
   for (let w = 1; w <= ROTATION_WEEKS; w++) {
     const prev = data.plan[addDays(monday, -7 * w)];
     if (!prev) continue;
-    for (const m of prev) if (m.recipeId) out.set(m.recipeId, (out.get(m.recipeId) ?? 0) + (ROTATION_WEEKS + 1 - w));
+    for (const m of prev) if (m.recipeId && !m.free) out.set(m.recipeId, (out.get(m.recipeId) ?? 0) + (ROTATION_WEEKS + 1 - w));
   }
   return out;
 }
@@ -149,7 +149,7 @@ export function generateWeek(data: AppData, monday: ISODate, opts: GenerateOptio
   const isMain = (s: MealSlot) => s === 'comida' || s === 'cena';
   const register = (m: PlannedMeal) => {
     out.push(m);
-    const r = recipeOf(m.recipeId);
+    const r = m.free ? undefined : recipeOf(m.recipeId);
     if (!r) return;
     usedWeek.set(r.id, (usedWeek.get(r.id) ?? 0) + 1);
     if (isMain(m.slot)) mainCount.set(r.main, (mainCount.get(r.main) ?? 0) + 1);
@@ -256,7 +256,7 @@ export function generateWeek(data: AppData, monday: ISODate, opts: GenerateOptio
 
 /** Platos que se conservan al regenerar: hechos, omitidos, aceptados o de días pasados. */
 function keepOnRegenerate(m: PlannedMeal, fromDate: ISODate) {
-  return m.date < fromDate || m.status !== 'pendiente' || !!m.accepted;
+  return m.date < fromDate || m.status !== 'pendiente' || !!m.accepted || !!m.free;
 }
 
 /**
@@ -288,8 +288,8 @@ export function regenerateWeek(data: AppData, monday: ISODate, fromDate: ISODate
 export function regenerateDay(data: AppData, date: ISODate, seed: string): number {
   const monday = startOfWeekLocal(date);
   const week = data.plan[monday] ?? [];
-  const keep = week.filter((m) => m.date !== date || m.status !== 'pendiente');
-  const before = week.filter((m) => m.date === date && m.status === 'pendiente');
+  const keep = week.filter((m) => m.date !== date || m.status !== 'pendiente' || m.free);
+  const before = week.filter((m) => m.date === date && m.status === 'pendiente' && !m.free);
   const avoid = new Set(before.map((m) => m.recipeId).filter((x): x is string => !!x));
   data.plan[monday] = generateWeek(data, monday, { keep, dates: [date], seed, avoid });
   let changed = 0;
@@ -305,7 +305,7 @@ export function regenerateDay(data: AppData, date: ISODate, seed: string): numbe
 /** Marca como aceptados todos los platos pendientes de la semana (no se cambiarán al regenerar). */
 export function acceptWeek(data: AppData, monday: ISODate): number {
   let n = 0;
-  for (const m of data.plan[monday] ?? []) if (!m.accepted && m.status === 'pendiente') { m.accepted = true; n++; }
+  for (const m of data.plan[monday] ?? []) if (!m.accepted && !m.free && m.status === 'pendiente') { m.accepted = true; n++; }
   return n;
 }
 
@@ -411,7 +411,7 @@ export function regenerateFrom(data: AppData, fromDate: ISODate): void {
   for (const monday of Object.keys(data.plan)) {
     if (monday < startOfWeekLocal(fromDate)) continue;
     const keep = data.plan[monday].filter((m) => {
-      if (m.date < fromDate || m.status !== 'pendiente') return true;
+      if (m.date < fromDate || m.status !== 'pendiente' || m.free) return true;
       if (!m.accepted) return false;
       const r = getRecipe(data, m.recipeId);
       return !r || r.custom || recipeFit(data, r, data.profile).ok;

@@ -13,7 +13,7 @@ import { navigate } from '../lib/router';
 import { allRecipes, getRecipe, SLOT_META, slotsOrdered } from '../services/catalog';
 import { addMacros, plannedMealNutrition, ZERO } from '../services/nutrition';
 import { trackingStart } from '../services/habits';
-import { MacroInline, RecipeCover } from '../features/meals/RecipeBits';
+import { FreeMealCover, MacroInline, RecipeCover } from '../features/meals/RecipeBits';
 import { RecipeSheet } from '../features/meals/RecipeSheet';
 import { SwapSheet } from '../features/meals/SwapSheet';
 import { StatusNode } from '../features/today/MealTimeline';
@@ -41,7 +41,7 @@ export function PlanPage({ dateParam }: { dateParam: string | null }) {
   }, ZERO);
   const done = dayMeals.filter((m) => m.status === 'hecha').length;
 
-  const pendingDay = dayMeals.filter((m) => m.status === 'pendiente');
+  const pendingDay = dayMeals.filter((m) => m.status === 'pendiente' && !m.free);
   const changeDay = async () => {
     if (!pendingDay.length) return;
     const ok = await confirm({
@@ -159,16 +159,20 @@ export function PlanPage({ dateParam }: { dateParam: string | null }) {
                 return (
                   <li key={slot}>
                     <Card as="article" className={cx('flex items-center gap-3 p-3 sm:gap-4', m.status === 'omitida' && 'opacity-60')}>
-                      <button type="button" disabled={!r} onClick={() => r && setRecipeView({ recipe: r, meal: m })} className="flex min-w-0 flex-1 items-center gap-3 rounded-[14px] text-left sm:gap-4">
-                        <RecipeCover recipe={r} size={68} />
+                      <button type="button" disabled={!r || m.free} onClick={() => r && !m.free && setRecipeView({ recipe: r, meal: m })} className="flex min-w-0 flex-1 items-center gap-3 rounded-[14px] text-left sm:gap-4" data-free-meal={m.free ? m.id : undefined}>
+                        {m.free ? <FreeMealCover size={68} /> : <RecipeCover recipe={r} size={68} />}
                         <span className="min-w-0 flex-1">
                           <span className="flex items-center gap-1 text-[12px] font-semibold uppercase tracking-wide text-ink3">
                             {SLOT_META[slot].label} · {data.profile.schedule[slot] ?? SLOT_META[slot].time}
                             {m.accepted && m.status === 'pendiente' && <Lock size={11} className="text-accent" aria-label="Aceptado" />}
                           </span>
-                          <span className="mt-0.5 block text-[16px] font-semibold leading-snug">{r ? recipeTitle(r) : m.customName}</span>
-                          {r && recipeSubtitle(r) && <span className="block truncate text-[13px] leading-snug text-ink3">{recipeSubtitle(r)}</span>}
-                          {n ? <MacroInline m={n} className="mt-0.5" /> : <span className="mt-0.5 block text-[13px] text-warn">Sin valores verificados</span>}
+                          <span className="mt-0.5 block text-[16px] font-semibold leading-snug">{m.free ? 'Comida libre' : r ? recipeTitle(r) : m.customName}</span>
+                          {m.free ? (
+                            <span className="block text-[13px] leading-snug text-ink3">Te saltas el plato del plan · come lo que te apetezca</span>
+                          ) : (
+                            r && recipeSubtitle(r) && <span className="block truncate text-[13px] leading-snug text-ink3">{recipeSubtitle(r)}</span>
+                          )}
+                          {n ? <MacroInline m={n} className="mt-0.5" /> : !m.free && <span className="mt-0.5 block text-[13px] text-warn">Sin valores verificados</span>}
                         </span>
                       </button>
                       <div className="flex shrink-0 flex-col items-center gap-1 sm:flex-row sm:gap-2">
@@ -252,7 +256,8 @@ function WeekActions({ monday }: { monday: string }) {
   const { toast, confirm } = useFeedback();
   const today = todayISO();
   const from = monday > today ? monday : today;
-  const meals = (data.plan[monday] ?? []).filter((m) => data.profile.mealSlots.includes(m.slot) && m.date >= from && m.status === 'pendiente');
+  const freeCount = (data.plan[monday] ?? []).filter((m) => m.free && data.profile.mealSlots.includes(m.slot)).length;
+  const meals = (data.plan[monday] ?? []).filter((m) => data.profile.mealSlots.includes(m.slot) && m.date >= from && m.status === 'pendiente' && !m.free);
   if (!meals.length) return null;
   const accepted = meals.filter((m) => m.accepted).length;
   const open = meals.length - accepted;
@@ -288,6 +293,7 @@ function WeekActions({ monday }: { monday: string }) {
         <p className="min-w-0 text-[14px] leading-snug text-ink2 sm:flex-1">
           <span className="font-semibold text-ink">{open === 0 ? 'Menú aceptado' : 'Propuesta de la semana'}</span>
           <span className="tabular"> · {accepted} de {meals.length} platos pendientes aceptados</span>
+          {freeCount > 0 && <span className="tabular" data-free-count> · {freeCount} {freeCount === 1 ? 'comida libre' : 'comidas libres'}</span>}
         </p>
         <div className="flex gap-2 [&>*]:flex-1 sm:[&>*]:flex-none">
           <Button size="sm" variant="secondary" icon={<RefreshCw size={16} />} onClick={regenerate} disabled={open === 0} data-regenerate-week>

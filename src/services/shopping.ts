@@ -67,7 +67,7 @@ export function buildShoppingList(data: AppData, monday: ISODate): { groups: Sho
   const freeDishes: string[] = [];
 
   for (const meal of data.plan[monday] ?? []) {
-    if (meal.status === 'omitida' || !data.profile.mealSlots.includes(meal.slot)) continue;
+    if (meal.status === 'omitida' || meal.free || !data.profile.mealSlots.includes(meal.slot)) continue;
     const r = getRecipe(data, meal.recipeId);
     if (!r) {
       if (meal.customName) freeDishes.push(meal.customName);

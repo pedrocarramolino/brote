@@ -62,6 +62,7 @@ export function AddToPlanSheet({ recipe, open, onClose, source = 'manual' }: { r
         m.recipeId = recipe.id;
         delete m.customName;
         delete m.swaps;
+        delete m.free;
         m.status = 'pendiente';
         m.accepted = true;
       } else {

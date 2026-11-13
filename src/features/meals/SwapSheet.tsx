@@ -12,7 +12,7 @@ import { recipeNutrition } from '../../services/nutrition';
 import { CATEGORY_META, recipeMatches, recipeSubtitle, recipeTitle } from '../../services/recipeMeta';
 import { userDishes } from '../../services/dishes';
 import { recipeFit } from '../../services/nutrition';
-import { MacroInline, RecipeCover } from './RecipeBits';
+import { FreeMealCover, MacroInline, RecipeCover } from './RecipeBits';
 import { useMealActions } from './useMealActions';
 
 function Delta({ v, unit, invert = false }: { v: number; unit: string; invert?: boolean }) {
@@ -27,7 +27,7 @@ function Delta({ v, unit, invert = false }: { v: number; unit: string; invert?: 
  */
 export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; open: boolean; onClose: () => void }) {
   const data = useData();
-  const { swap } = useMealActions();
+  const { swap, setFree } = useMealActions();
   const [selected, setSelected] = useState<Alternative | null>(null);
   const [freeMode, setFreeMode] = useState(false);
   const [freeName, setFreeName] = useState('');
@@ -141,6 +141,20 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
     >
       {!selected && !freeMode && (
         <>
+          <button
+            type="button"
+            onClick={() => { setFree(meal, !meal.free); onClose(); }}
+            className="press mb-3 flex w-full items-center gap-3 rounded-[16px] bg-warnSoft/70 p-3 text-left"
+            data-free-meal-toggle
+          >
+            <FreeMealCover size={44} />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[16px] font-semibold">{meal.free ? 'Volver al plato del plan' : 'Comida libre'}</span>
+              <span className="block text-[13px] leading-snug text-ink2">
+                {meal.free ? 'Recupera el plato que tenías previsto.' : 'Sáltate este plato y come lo que te apetezca. No suma calorías previstas ni entra en la compra.'}
+              </span>
+            </span>
+          </button>
           <div className="mb-4 flex items-start gap-2 rounded-[14px] bg-accentSoft/70 px-3.5 py-2.5 text-[13px] leading-snug text-accent-deep">
             <ShieldCheck size={18} className="mt-[1px] shrink-0" />
             <span>

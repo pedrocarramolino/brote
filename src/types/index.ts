@@ -195,6 +195,12 @@ export interface PlannedMeal {
    * valor = alimento equivalente y cantidad por ración. La receta del catálogo no se modifica.
    */
   swaps?: Record<string, { foodId: string; amount: number }>;
+  /**
+   * Comida libre: el usuario se «salta» el plato del plan y come lo que quiera.
+   * Se conserva recipeId para poder volver al plato. No suma calorías previstas, no entra
+   * en la lista de la compra ni cuenta para la rotación de recetas.
+   */
+  free?: boolean;
   /** valores congelados (por ración) cuando el plato del usuario se edita o elimina después de usarlo */
   snapshot?: NutritionSnapshot;
   /**

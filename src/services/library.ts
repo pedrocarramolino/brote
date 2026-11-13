@@ -26,7 +26,7 @@ export interface HistoryEntry {
 export function recipeHistory(data: AppData, until: ISODate = todayISO()): HistoryEntry[] {
   const seen = new Map<string, HistoryEntry>();
   const meals: PlannedMeal[] = [];
-  for (const week of Object.values(data.plan)) for (const m of week) if (m.recipeId && m.date <= until && m.status !== 'omitida') meals.push(m);
+  for (const week of Object.values(data.plan)) for (const m of week) if (m.recipeId && m.date <= until && m.status !== 'omitida' && !m.free) meals.push(m);
   meals.sort((a, b) => b.date.localeCompare(a.date));
   for (const m of meals) {
     const prev = seen.get(m.recipeId!);

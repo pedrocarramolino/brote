@@ -58,13 +58,24 @@ Mis platos (AppData.customRecipes, custom: true) ─┼─► Recetas ─► Pla
 
 `components/ui/Sheet.tsx` guarda `onClose` en una referencia y su efecto de foco depende solo de `open`. Antes dependía también de `onClose`: las páginas pasan funciones nuevas en cada render, así que cada pulsación volvía a ejecutar el efecto, que movía el foco al panel. El campo perdía el foco y el teclado del iPhone se cerraba tras cada número. Afectaba a todas las hojas con campos de texto. Para evitar que vuelva a pasar, cualquier efecto de una hoja que mueva el foco debe depender solo de `open`.
 
+## Comida libre
+
+`PlannedMeal.free = true` marca una comida del plan como libre: el usuario se salta el plato y come lo que quiera. Se activa y se deshace desde «Cambiar plato» (Plan y Hoy) y desde el menú «⋯» de la comida en Hoy. Se conserva `recipeId` para volver al plato. Efectos:
+
+- No suma calorías previstas: `plannedMealNutrition` devuelve null.
+- No entra en la lista de la compra.
+- No cuenta para la rotación ni el historial de recetas.
+- Se conserva con «Otra propuesta», «Cambiar día», «Aceptar menú», `regenerateFrom` y la revisión semanal.
+- Puede marcarse como hecha. Lo que se coma se registra, si se quiere, con «Añadir alimento».
+- Plan muestra cuántas comidas libres tiene la semana.
+
 ## Biblioteca de recetas
 
 672 recetas: 130 desayunos, 180 comidas, 133 cenas, 79 meriendas, 66 de media mañana, 46 snacks y 38 postres. Las 145 de `recipeLibrary/v4/` usan los alimentos incorporados: quesos (manchego, cheddar, gouda, brie, roquefort, cabrales, provolone, ricotta, tetilla…), cordero, conejo, costillas, embutidos, lenguado, besugo, rodaballo, salmonete, berberechos, zamburiñas, vieiras, legumbres secas, bebidas vegetales y proteína en polvo. Cada ingrediente es un `foodId` de la base: la nutrición se calcula, nunca se escribe a mano. 609 recetas se calculan al 100 % con datos de BEDCA/USDA y el resto incluye algún alimento estimado. Las recetas oficiales no usan productos de marca (cargan en diferido); los platos del usuario sí. El planificador penaliza repetir recetas de las 4 semanas anteriores (−30 − 10 × reciente) y avisa cuando una franja tiene menos de 35 recetas compatibles.
 
 ## Pruebas
 
-- `npm run check:library`: integridad de la biblioteca y simulación del planificador.
+- `npm run check:library`: integridad de la biblioteca, simulación del planificador, sustituciones, lista de la compra y comida libre.
 - `npm run check:dishes`: 18 comprobaciones de Mis platos (un ingrediente, cinco, cambio de cantidad, borrar ingrediente, raciones, unidades, guardar, persistencia JSON, menú semanal y compra, registrar 1 y ½ ración, suma del día, borrar consumo, editar, historial intacto, duplicar, borrar plato, datos incompletos).
 - `npm run check:foods`: cantidad y variedad por grupo, ids únicos, fuente declarada, genérico/marca, buscador («leche», «queso», «mozarela», «yogurt griego», «hacendado leche», «quesos»), velocidad, plato con alimentos nuevos y recetas que los usan.
 - `npm run typecheck` y `npm run build`.

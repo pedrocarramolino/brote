@@ -1,5 +1,5 @@
 import type React from 'react';
-import { HelpCircle } from 'lucide-react';
+import { HelpCircle, PartyPopper } from 'lucide-react';
 import type { Macros, Recipe } from '../../types';
 import { RECIPE_ICONS } from '../../components/ui/icons';
 import { cx } from '../../components/ui/primitives';
@@ -104,5 +104,14 @@ export function MacroGrid({ m }: { m: Macros }) {
         </div>
       ))}
     </dl>
+  );
+}
+
+/** Portada de una comida libre. */
+export function FreeMealCover({ size = 56 }: { size?: number }) {
+  return (
+    <div className="flex shrink-0 items-center justify-center rounded-[14px] bg-warnSoft text-warn" style={{ width: size, height: size }} aria-hidden="true" data-free-cover>
+      <PartyPopper size={Math.round(size * 0.44)} strokeWidth={1.7} />
+    </div>
   );
 }

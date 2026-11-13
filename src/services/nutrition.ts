@@ -163,6 +163,8 @@ export interface MealNutrition {
 }
 
 export function plannedMealNutrition(data: AppData, meal: PlannedMeal): MealNutrition {
+  // comida libre: sin plato previsto (lo que se coma se registra con «Añadir alimento»)
+  if (meal.free) return { macros: null };
   // valores congelados: el plato del usuario se editó o borró después de usarse
   if (meal.snapshot) return { macros: scaleMacros(meal.snapshot.perServing, meal.portion) };
   const r = getRecipe(data, meal.recipeId);

@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Ban, Check, Minus, Plus, RotateCcw } from 'lucide-react';
+import { ArrowLeftRight, Ban, Check, Minus, Plus, PartyPopper, RotateCcw } from 'lucide-react';
 import type { FoodLogEntry, ISODate, MealSlot, PlannedMeal } from '../../types';
 import { useData } from '../../store/AppStore';
 import { getFood, getRecipe, SLOT_META, slotsOrdered } from '../../services/catalog';
@@ -7,7 +7,7 @@ import { servingsLabel } from '../../lib/format';
 import { cx } from '../../components/ui/primitives';
 import { MoreMenu } from '../../components/ui/Menu';
 import { n0 } from '../../lib/format';
-import { MacroInline, RecipeCover } from '../meals/RecipeBits';
+import { FreeMealCover, MacroInline, RecipeCover } from '../meals/RecipeBits';
 import { useMealActions } from '../meals/useMealActions';
 import { recipeSubtitle, recipeTitle } from '../../services/recipeMeta';
 
@@ -50,7 +50,7 @@ export function StatusNode({ meal, onToggle, size = 30 }: { meal: PlannedMeal; o
 
 export function MealTimeline({ date, meals, onOpenRecipe, onSwap, onAddFood, onEditLog }: Props) {
   const data = useData();
-  const { toggleDone, setStatus } = useMealActions();
+  const { toggleDone, setStatus, setFree } = useMealActions();
   const slots = slotsOrdered(data.profile.mealSlots);
 
   return (
@@ -82,6 +82,15 @@ export function MealTimeline({ date, meals, onOpenRecipe, onSwap, onAddFood, onE
                 </div>
                 {meal ? (
                   <div className="flex items-center gap-1 pb-2 pl-2 pr-1">
+                    {meal.free ? (
+                      <div className="flex min-w-0 flex-1 items-center gap-3 p-2" data-free-meal={meal.id}>
+                        <FreeMealCover size={52} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[16px] font-semibold leading-snug">Comida libre</span>
+                          <span className="block text-[13px] leading-snug text-ink3">Come lo que te apetezca. Si quieres contarlo, añade lo que comas.</span>
+                        </span>
+                      </div>
+                    ) : (
                     <button type="button" data-open-recipe={meal.id} onClick={() => onOpenRecipe(meal)} className="flex min-w-0 flex-1 items-center gap-3 rounded-[14px] p-2 text-left hover:bg-surface2/60" disabled={!recipe}>
                       <RecipeCover recipe={recipe} size={52} />
                       <span className="min-w-0 flex-1">
@@ -97,10 +106,14 @@ export function MealTimeline({ date, meals, onOpenRecipe, onSwap, onAddFood, onE
                         {recipe && meal.portion !== 1 && <span className="text-[12px] text-ink3">Ración ×{String(meal.portion).replace('.', ',')}</span>}
                       </span>
                     </button>
+                    )}
                     <MoreMenu
                       label={`Opciones de ${SLOT_META[slot].label.toLowerCase()}`}
                       items={[
                         { label: 'Cambiar plato', icon: <ArrowLeftRight size={18} />, onSelect: () => onSwap(meal) },
+                        meal.free
+                          ? { label: 'Volver al plato del plan', icon: <RotateCcw size={18} />, onSelect: () => setFree(meal, false) }
+                          : { label: 'Comida libre', icon: <PartyPopper size={18} />, onSelect: () => setFree(meal, true) },
                         { label: 'Añadir alimento', icon: <Plus size={18} />, onSelect: () => onAddFood(slot) },
                         meal.status === 'omitida'
                           ? { label: 'Restaurar', icon: <RotateCcw size={18} />, onSelect: () => setStatus(meal, 'pendiente') }

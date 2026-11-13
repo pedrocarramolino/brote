@@ -28,3 +28,6 @@ create index if not exists ingredients_name_trgm on public.ingredients using gin
 
 -- Registro diario: copia de los valores por 100 g/ml en el momento del consumo
 alter table public.food_logs add column if not exists per100 jsonb; -- {kcal, protein, carbs, fat}
+
+-- Comida libre: el usuario se salta el plato del plan (se conserva recipe_id para volver a él)
+alter table public.planned_meals add column if not exists free boolean not null default false;

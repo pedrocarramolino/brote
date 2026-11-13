@@ -7,6 +7,8 @@ import { BASE_FOODS } from '../src/data/foods';
 import { baseProfile, createUserData } from '../src/data/demo';
 import { acceptWeek, candidatesFor, generateWeek, regenerateDay, regenerateWeek } from '../src/services/planner';
 import { buildShoppingList } from '../src/services/shopping';
+import { plannedMealNutrition } from '../src/services/nutrition';
+const recipeTitleOf = (id: string | null) => { const r = RECIPE_LIBRARY.find((x) => x.id === id); return r?.title ?? r?.name; };
 import { addDays, startOfWeek } from '../src/lib/dates';
 import type { AppData, UserProfile } from '../src/types';
 
@@ -113,6 +115,23 @@ simulate('sin pescado ni lactosa, 30 min', { allergies: ['pescado', 'marisco', '
   if (!keys.includes('man1')) problems.push('La lista de la compra pierde productos manuales');
   regenerateDay(sim, addDays(monday, 2), 'x4');
   if (!buildShoppingList(sim, monday).groups.some((g) => g.items.some((i) => i.key === 'man1'))) problems.push('Al cambiar un día se pierde un producto manual');
+  // Comida libre: no suma, no entra en la compra y se respeta al regenerar
+  {
+    const fm = sim.plan[monday].find((m) => m.slot === 'comida' && m.status === 'pendiente')!;
+    const freeRecipe = fm.recipeId;
+    const shopBefore = buildShoppingList(sim, monday).total;
+    fm.free = true;
+    const n = plannedMealNutrition(sim, fm).macros;
+    const shopAfter = buildShoppingList(sim, monday);
+    regenerateWeek(sim, monday, monday, 'free1');
+    regenerateDay(sim, fm.date, 'free2');
+    const still = sim.plan[monday].find((m) => m.id === fm.id);
+    if (n !== null) problems.push('La comida libre suma calorías previstas');
+    if (!still?.free || still.recipeId !== freeRecipe) problems.push('Regenerar cambia o quita una comida libre');
+    const usedIn = shopAfter.groups.flatMap((g) => g.items).some((i) => i.usedIn.length && i.usedIn.every((u) => u === recipeTitleOf(freeRecipe)));
+    console.log(`\nComida libre: sin calorías previstas ${n === null ? 'sí' : 'NO'}; se conserva al regenerar ${still?.free ? 'sí' : 'NO'}; lista de la compra ${shopBefore} → ${shopAfter.total} productos`);
+    if (usedIn) problems.push('La comida libre sigue en la lista de la compra');
+  }
   console.log(`\nSustituciones: regenerar tras aceptar cambió ${changed} platos; sin aceptar, ${changed2}. Lista de la compra: ${keys.length} productos sin duplicados.`);
 }
 

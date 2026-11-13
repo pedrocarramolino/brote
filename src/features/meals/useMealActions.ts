@@ -61,6 +61,7 @@ export function useMealActions() {
         const m = findMeal(d, meal.id);
         if (!m) return;
         delete m.swaps; // las sustituciones de ingredientes eran del plato anterior
+        delete m.free;
         m.accepted = true; // elegido por el usuario: no se cambia al regenerar la propuesta
         logReplacement(d, { date: m.date, slot: m.slot, fromRecipeId: prev.recipeId, toRecipeId: 'recipeId' in next ? next.recipeId : null, source });
         if ('recipeId' in next) {
@@ -169,5 +170,21 @@ export function useMealActions() {
     [mutate],
   );
 
-  return { toggleDone, setStatus, setPortion, swap, swapIngredient, addLog, updateLog, removeLog, addPlanned };
+  /** Comida libre: se salta el plato del plan (se puede volver a él). */
+  const setFree = useCallback(
+    (meal: PlannedMeal, free: boolean) => {
+      const apply = (v: boolean) =>
+        mutate((d) => {
+          const m = findMeal(d, meal.id);
+          if (!m) return;
+          if (v) m.free = true;
+          else delete m.free;
+        });
+      apply(free);
+      toast(free ? 'Comida libre: disfrútala' : 'Has vuelto al plato del plan', { action: { label: 'Deshacer', onClick: () => apply(!free) } });
+    },
+    [mutate, toast],
+  );
+
+  return { setFree, toggleDone, setStatus, setPortion, swap, swapIngredient, addLog, updateLog, removeLog, addPlanned };
 }
