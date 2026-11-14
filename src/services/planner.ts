@@ -147,8 +147,14 @@ export function generateWeek(data: AppData, monday: ISODate, opts: GenerateOptio
   for (const m of opts.keep ?? []) for (const e of m.extras ?? []) if (e.kind === 'postre') dessertUse.set(e.foodId, (dessertUse.get(e.foodId) ?? 0) + 1);
   const dessertFoods = DESSERTS.filter((x) => getFood(data, x.foodId) && !conflictingFoods(data, [{ foodId: x.foodId }], data.profile).length);
   /** postre para una comida principal, o null (no toca, o no cabe en la energía de la comida) */
+  let mainSeen = 0;
+  let dessertGiven = 0;
   const pickDessert = (date: ISODate, r: Recipe): MealExtra | null => {
-    if (drand() >= DESSERT_RATE || r.category === 'postre') return null;
+    // reparto equilibrado: la probabilidad sube si van pocos postres y baja si van muchos,
+    // así la semana queda cerca de DESSERT_RATE sea cual sea el azar
+    const want = (mainSeen + 1) * DESSERT_RATE - dessertGiven;
+    mainSeen++;
+    if (drand() >= Math.min(1, Math.max(0, want)) || r.category === 'postre') return null;
     // si el plato ya lleva fruta, no se repite como postre
     if (r.ingredients.some((i) => FRUIT_IDS.has(i.foodId) && i.amount >= 60)) return null;
     const month = Number(date.slice(5, 7));
@@ -239,7 +245,7 @@ export function generateWeek(data: AppData, monday: ISODate, opts: GenerateOptio
         score -= (usedWeek.get(r.id) ?? 0) * 120;
         if (todayIds.has(r.id)) score -= 200;
         // rotación de 4 semanas y recuperación de recetas antiguas
-        if (recent.has(r.id)) score -= 30 + (recent.get(r.id) ?? 0) * 10; // 4 semanas: pesa más que el ajuste fino de calorías
+        if (recent.has(r.id)) score -= 40 + (recent.get(r.id) ?? 0) * 10; // 4 semanas: pesa más que el ajuste fino de calorías
         if (!recent.has(r.id) && older.has(r.id)) score += 2;
         if (notWanted.has(r.id)) score -= 8;
         if (opts.avoid?.has(r.id)) score -= 60;
@@ -293,7 +299,10 @@ export function generateWeek(data: AppData, monday: ISODate, opts: GenerateOptio
       if (dessert && target && kcal > 0 && (target - dk) / kcal < 0.75) dessert = null;
       const room = target ? target - (dessert ? dk : 0) : null;
       if (room && kcal > 0) portion = Math.min(1.5, Math.max(0.75, Math.round((room / kcal) * 4) / 4));
-      if (dessert) dessertUse.set(dessert.foodId, (dessertUse.get(dessert.foodId) ?? 0) + 1);
+      if (dessert) {
+        dessertUse.set(dessert.foodId, (dessertUse.get(dessert.foodId) ?? 0) + 1);
+        dessertGiven++;
+      }
       register({ id: uid('pm'), date, slot, recipeId: r.id, portion, status: 'pendiente', ...(dessert ? { extras: [dessert] } : {}) });
     }
   });

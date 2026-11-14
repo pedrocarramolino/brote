@@ -118,7 +118,7 @@ console.log(`  Recetas calculadas al 100 % con datos de BEDCA/USDA: ${official.l
   migrateFoodDb(d, '2026-11-13');
   const logKcal = dayTotals(d, '2026-11-03').consumed.kcal - plannedMealNutrition(d, d.plan['2026-11-02'][0]).macros!.kcal;
   const mealKcal = plannedMealNutrition(d, d.plan['2026-11-02'][0]).macros!.kcal;
-  ok(Math.abs(logKcal - legacyLog) < 0.01 && Math.abs(mealKcal - legacyMeal) < 0.01 && d.foodDbVersion === 3,
+  ok(Math.abs(logKcal - legacyLog) < 0.01 && Math.abs(mealKcal - legacyMeal) < 0.01 && d.foodDbVersion === 4,
     'Registros anteriores conservan sus valores tras pasar a datos oficiales',
     `pollo 150 g: ${legacyLog.toFixed(0)} kcal (con BEDCA/USDA serían ${((BASE_FOODS.find((f) => f.id === 'pollo')!.per100.kcal * 150) / 100).toFixed(0)}); comida hecha ${mealKcal.toFixed(0)} kcal; total antes de migrar ${before.toFixed(0)}`);
   // un registro nuevo guarda sus valores y no cambia si se corrige el alimento
@@ -196,6 +196,25 @@ console.log(`  Recetas calculadas al 100 % con datos de BEDCA/USDA: ${official.l
   Object.assign(d.log[0], { amount: 75, quantity: 1 });
   const k1 = dayTotals(d, '2026-11-13').consumed.kcal;
   ok(Math.abs(k2 - k1 - kcal(kiwi, 75)) < 0.01, 'Registro diario: 2 kiwis → 1 recalcula el día', `${k2.toFixed(0)} → ${k1.toFixed(0)} kcal`);
+}
+
+// ---------------------------------------------------------------------------
+// Gnocchi: se encuentra con cualquier grafía, valor de etiquetas y el historial no cambia
+{
+  const g = getFood({ customFoods: [] }, 'gnocchi')!;
+  const spellings = ['gnocchi', 'gnochi', 'ñoquis', 'noquis', 'gnoquis'];
+  const firsts = spellings.map((q) => idx.search(q, { limit: 3 })[0]?.id);
+  ok(firsts.every((id) => id === 'gnocchi'), 'Buscar gnocchi con cualquier grafía (gnochi, ñoquis…)', spellings.map((q, i) => `${q} → ${firsts[i]}`).join(', '));
+  ok(g.per100.kcal === 154 && g.source === 'openfoodfacts' && !!g.ref, 'Gnocchi con valor de referencia (mediana de etiquetas)', `${g.name}: ${g.per100.kcal} kcal, ${g.per100.carbs} g hidratos /100 g (${g.ref})`);
+  const recipe = RECIPE_LIBRARY.find((r) => r.ingredients.some((i) => i.foodId === 'gnocchi'))!;
+  const d: AppData = createUserData(baseProfile({ name: 'Gnocchi' }));
+  d.foodDbVersion = 3;
+  d.plan = { '2026-11-02': [{ id: 'pg', date: '2026-11-03', slot: 'comida', recipeId: recipe.id, portion: 1, status: 'hecha' }] };
+  d.log = [{ id: 'lg', date: '2026-11-03', slot: 'cena', foodId: 'gnocchi', amount: 200, createdAt: '', method: 'manual' }];
+  migrateFoodDb(d, '2026-11-14');
+  const old = LEGACY_PER100.gnocchi.kcal;
+  const logK = dayTotals(d, '2026-11-03').consumed.kcal - plannedMealNutrition(d, d.plan['2026-11-02'][0]).macros!.kcal;
+  ok(Math.abs(logK - old * 2) < 0.01 && d.foodDbVersion === 4 && !!d.plan['2026-11-02'][0].snapshot, 'Lo ya comido con gnocchi conserva el valor anterior', `200 g registrados: ${logK.toFixed(0)} kcal (antes ${old}/100 g; ahora ${g.per100.kcal}/100 g)`);
 }
 
 if (problems.length) {

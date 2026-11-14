@@ -3,6 +3,12 @@
  * Uso: npm run check:library
  */
 import { RECIPE_LIBRARY } from '../src/data/recipeLibrary';
+import { DESAYUNOS_V5 } from '../src/data/recipeLibrary/v5/desayunos';
+import { MEDIA_MANANA_V5, MERIENDAS_V5, POSTRES_V5, SNACKS_V5 } from '../src/data/recipeLibrary/v5/ligeras';
+import { COMIDAS_V5 } from '../src/data/recipeLibrary/v5/comidas';
+import { CENAS_V5 } from '../src/data/recipeLibrary/v5/cenas';
+import { GNOCCHI_CENA, GNOCCHI_COMIDA } from '../src/data/recipeLibrary/v5/gnocchi';
+import CURATED from '../src/data/foodDb/curated.json';
 import { BASE_FOODS } from '../src/data/foods';
 import { baseProfile, createUserData } from '../src/data/demo';
 import { acceptWeek, candidatesFor, generateWeek, regenerateDay, regenerateWeek } from '../src/services/planner';
@@ -209,6 +215,25 @@ simulate('sin pescado ni lactosa, 30 min', { allergies: ['pescado', 'marisco', '
   const vegan = createUserData(baseProfile({ name: 'Vegana', dietType: 'vegana' } as Partial<UserProfile>));
   if (!candidatesFor(vegan, 'comida').some((r) => /burger/.test(r.id))) problems.push('No hay hamburguesas para perfiles veganos');
   if (candidatesFor(vegan, 'comida').some((r) => r.ingredients.some((i) => i.foodId === 'hamburguesa_vegetal'))) problems.push('Se propone la hamburguesa vegetal (puede llevar huevo) a un perfil vegano');
+}
+
+// ---------------------------------------------------------------------------
+// Gnocchi y las 200 recetas v5 con los últimos alimentos incorporados
+{
+  const recent = new Set<string>([
+    ...(CURATED as { added: { id: string }[] }).added.map((a) => a.id),
+    'leche_entera_sin_lactosa', 'leche_semi_sin_lactosa', 'leche_desnatada_sin_lactosa', 'hamburguesa_wagyu', 'hamburguesa_mixta', 'gnocchi',
+  ]);
+  const v5 = [...DESAYUNOS_V5, ...MEDIA_MANANA_V5, ...COMIDAS_V5, ...MERIENDAS_V5, ...CENAS_V5, ...SNACKS_V5, ...POSTRES_V5];
+  const withoutRecent = v5.filter((r) => !r.ingredients.some((i) => recent.has(i.foodId)));
+  const used = new Set(v5.flatMap((r) => r.ingredients.map((i) => i.foodId)).filter((id) => recent.has(id)));
+  const gnocchi = RECIPE_LIBRARY.filter((r) => r.ingredients.some((i) => i.foodId === 'gnocchi'));
+  const byCat = v5.reduce<Record<string, number>>((a, r) => ((a[r.category] = (a[r.category] ?? 0) + 1), a), {});
+  console.log(`\nRecetas v5: ${v5.length} (${Object.entries(byCat).map(([k, v]) => `${v} ${k}`).join(', ')}) · usan ${used.size} de los ${recent.size} últimos alimentos · gnocchi: ${gnocchi.length} recetas (${GNOCCHI_COMIDA.length + GNOCCHI_CENA.length} nuevas)`);
+  if (v5.length !== 200) problems.push(`Se esperaban 200 recetas v5 y hay ${v5.length}`);
+  if (withoutRecent.length) problems.push(`Recetas v5 sin ninguno de los últimos alimentos: ${withoutRecent.map((r) => r.id).join(', ')}`);
+  if (gnocchi.length < 12) problems.push(`Pocas recetas con gnocchi (${gnocchi.length})`);
+  if (used.size < 80) problems.push(`Las recetas v5 usan pocos alimentos nuevos distintos (${used.size})`);
 }
 
 if (RECIPE_LIBRARY.length < 500) problems.push(`Solo hay ${RECIPE_LIBRARY.length} recetas (mínimo 500)`);

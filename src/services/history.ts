@@ -1,5 +1,5 @@
 import type { AppData, Food, Macros } from '../types';
-import { BASE_FOODS, FOOD_DB_VERSION, GENERIC_ALIAS, LEGACY_PER100, OFFICIAL_FOODS } from '../data/foods';
+import { BASE_FOODS, CHANGED_V4, FOOD_DB_VERSION, GENERIC_ALIAS, LEGACY_PER100, OFFICIAL_FOODS } from '../data/foods';
 import { getFood, getRecipe } from './catalog';
 import { addMacros, mealIngredients, scaleMacros, ZERO } from './nutrition';
 import { FoodIndex } from './foodSearch';
@@ -19,6 +19,7 @@ export function migrateFoodDb(d: AppData, today: string): void {
   if (version >= FOOD_DB_VERSION) return;
   if (version < 2) freezeLegacyValues(d, today);
   if (version < 3) removeBrands(d, today);
+  if (version < 4) freezeChanged(d, today, CHANGED_V4);
   d.foodDbVersion = FOOD_DB_VERSION;
 }
 
@@ -131,4 +132,33 @@ function removeBrands(d: AppData, today: string): void {
     s.removed = rekey(s.removed ?? {});
   }
   delete (d.profile as { useOpenFoodFacts?: boolean }).useOpenFoodFacts;
+}
+
+/**
+ * v3 → v4: congela con el valor ANTERIOR los registros y comidas ya hechas o pasadas que usan
+ * un alimento cuyo valor ha cambiado (gnocchi). El resto del historial ya tenía su copia.
+ */
+function freezeChanged(d: AppData, today: string, ids: string[]): void {
+  const changed = new Set(ids);
+  const per100 = (id: string): Macros | undefined => (changed.has(id) ? LEGACY_PER100[id] : undefined) ?? getFood(d, id)?.per100;
+  for (const l of d.log) {
+    if (l.snapshot || l.per100 || !changed.has(l.foodId)) continue;
+    const p = per100(l.foodId);
+    if (p) l.per100 = { ...p };
+  }
+  for (const week of Object.values(d.plan)) {
+    for (const m of week) {
+      if (m.snapshot || !m.recipeId || m.free || (m.status !== 'hecha' && m.date >= today)) continue;
+      const ings = mealIngredients(d, m);
+      if (!ings.some((i) => changed.has(i.foodId))) continue;
+      const r = getRecipe(d, m.recipeId);
+      if (!r) continue;
+      let perServing: Macros = ZERO;
+      for (const i of ings) {
+        const p = per100(i.foodId);
+        if (p) perServing = addMacros(perServing, scaleMacros(p, i.amount / 100));
+      }
+      m.snapshot = { name: r.title ?? r.name, perServing, complete: true, at: new Date().toISOString() };
+    }
+  }
 }

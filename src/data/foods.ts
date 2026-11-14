@@ -290,8 +290,11 @@ const FIBER: Record<string, number> = {
 /** Valores por 100 g/ml que usaba la app antes de enlazar con BEDCA/USDA (solo para conservar el historial). */
 export const LEGACY_PER100: Record<string, Macros> = Object.fromEntries(rows.map(([id, , , kcal, protein, carbs, fat]) => [id, { kcal, protein, carbs, fat }]));
 
-/** Versión actual de la base de alimentos (2 = valores de BEDCA/USDA; 3 = solo alimentos genéricos, sin marcas). */
-export const FOOD_DB_VERSION = 3;
+/** Versión actual de la base de alimentos (2 = valores de BEDCA/USDA; 3 = solo alimentos genéricos, sin marcas; 4 = gnocchi con valor de etiquetas). */
+export const FOOD_DB_VERSION = 4;
+
+/** Alimentos cuyo valor cambió en la versión 4 (el anterior está en LEGACY_PER100). */
+export const CHANGED_V4 = ['gnocchi'];
 
 type OfficialRow = { id: string; n: string; u: 'g' | 'ml'; v: (number | null)[]; g: string; s: 'bedca' | 'usda'; r: number; a: Allergen[]; t: NonNullable<Food['tags']>; hidden?: boolean };
 const OFFICIAL_ROWS = OFFICIAL as unknown as OfficialRow[];
@@ -419,6 +422,29 @@ BASE_FOODS.push(
     group: 'Lácteos',
   })),
 );
+
+/**
+ * Gnocchi: no está en BEDCA ni en USDA. Desde la versión 4 de la base usa la mediana de las
+ * etiquetas de gnocchi de patata sin relleno (2 productos, 153 y 155 kcal; Open Food Facts, ODbL)
+ * en lugar del valor estimado anterior (133 kcal, conservado en LEGACY_PER100 para el historial).
+ */
+{
+  const g = BASE_FOODS.find((f) => f.id === 'gnocchi');
+  if (g) {
+    Object.assign(g, {
+      name: 'Gnocchi (ñoquis de patata)',
+      per100: { kcal: 154, protein: 3.8, carbs: 32.6, fat: 0.5 },
+      sat: 0.1,
+      sugars: 0.4,
+      fiber: 2,
+      salt: 0.9,
+      source: 'openfoodfacts',
+      ref: 'mediana de 2 etiquetas',
+      group: 'Cereales, pasta y arroz',
+      portion: { label: '1 plato', amount: 200 },
+    } satisfies Partial<Food>);
+  }
+}
 
 /**
  * Valores APROXIMADOS (source 'estimacion') para alimentos sin dato oficial propio, derivados de
