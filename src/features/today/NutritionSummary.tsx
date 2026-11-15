@@ -1,4 +1,4 @@
-import { Info } from 'lucide-react';
+import { Flame, Info } from 'lucide-react';
 import type { DayTotals } from '../../services/nutrition';
 import type { NutritionTargets } from '../../types';
 import { Card, ProgressBar, Ring } from '../../components/ui/primitives';
@@ -27,7 +27,40 @@ function MacroRow({ label, value, target, color, cls }: { label: string; value: 
   );
 }
 
-export function NutritionSummary({ totals, targets, title = 'Resumen nutricional' }: { totals: DayTotals; targets: NutritionTargets; title?: string }) {
+/** Progreso de calorías quemadas para la segunda rueda (opcional, solo en Hoy). */
+export interface BurnRingData {
+  burned: number;
+  target: number | null;
+  remaining: number | null;
+  percent: number | null;
+  onOpen: () => void;
+}
+
+/** Rueda de calorías quemadas con actividad: mismo componente y tamaño que la de ingeridas. */
+function BurnRing({ burn }: { burn: BurnRingData }) {
+  const has = !!burn.target;
+  return (
+    <button type="button" onClick={burn.onOpen} className="press flex shrink-0 flex-col items-center gap-1.5 rounded-[18px]" data-burn-ring aria-label={`Calorías quemadas: ${n0(burn.burned)}${has ? ` de ${n0(burn.target!)}` : ''}. Registrar`}>
+      <Ring
+        value={burn.burned}
+        max={burn.target || Math.max(burn.burned, 1)}
+        size={132}
+        stroke={13}
+        color={has || burn.burned > 0 ? 'rgb(var(--burn))' : 'rgb(var(--line))'}
+        label={`${n0(burn.burned)} kilocalorías quemadas${has ? ` de ${n0(burn.target!)}` : ''}`}
+      >
+        <Flame size={16} className="mb-0.5" style={{ color: 'rgb(var(--burn))' }} aria-hidden="true" />
+        <span className="tabular text-[28px] font-bold leading-none tracking-tight">{n0(burn.burned)}</span>
+        <span className="mt-1 text-[12px] font-medium text-ink2">{has ? `de ${n0(burn.target!)} kcal` : 'kcal'}</span>
+      </Ring>
+      <span className="tabular text-[12px] font-medium text-ink2" data-burn-ring-caption>
+        {has ? (burn.remaining ? `Faltan ${n0(burn.remaining)} · ${burn.percent} %` : `Objetivo cumplido · ${burn.percent} %`) : burn.target === 0 ? 'Déficit cubierto' : 'Quemadas · sin objetivo'}
+      </span>
+    </button>
+  );
+}
+
+export function NutritionSummary({ totals, targets, title = 'Resumen nutricional', burn }: { totals: DayTotals; targets: NutritionTargets; title?: string; burn?: BurnRingData }) {
   const c = totals.consumed;
   const hasKcal = !!targets.kcal;
   const remaining = hasKcal ? targets.kcal! - c.kcal : 0;
@@ -35,32 +68,59 @@ export function NutritionSummary({ totals, targets, title = 'Resumen nutricional
     <Card className="p-5">
       <h2 className="sr-only">{title}</h2>
       <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:gap-7">
-        <div className="flex items-center gap-5">
-          <Ring
-            value={c.kcal}
-            max={targets.kcal || Math.max(c.kcal, 1)}
-            size={132}
-            stroke={13}
-            color={hasKcal ? (c.kcal > targets.kcal! * 1.1 ? 'rgb(var(--warn))' : 'rgb(var(--accent))') : 'rgb(var(--line))'}
-            label={`${n0(c.kcal)} kilocalorías consumidas${hasKcal ? ` de ${n0(targets.kcal!)}` : ''}`}
-          >
-            <span className="tabular text-[28px] font-bold leading-none tracking-tight">{n0(c.kcal)}</span>
-            <span className="mt-1 text-[12px] font-medium text-ink2">{hasKcal ? `de ${n0(targets.kcal!)} kcal` : 'kcal'}</span>
-          </Ring>
-          <div className="sm:hidden">
-            {hasKcal ? (
-              <>
-                <p className="tabular text-[22px] font-bold leading-tight">{n0(Math.abs(remaining))}</p>
-                <p className="text-[14px] text-ink2">{remaining >= 0 ? 'kcal restantes' : 'kcal por encima del objetivo'}</p>
-              </>
-            ) : (
-              <button type="button" className="text-left text-[14px] font-semibold text-accent" onClick={() => navigate('perfil', { s: 'objetivos' })}>
-                Sin objetivo calórico. Configurar
-              </button>
-            )}
-            <p className="mt-2 text-[13px] text-ink3">{totals.doneMeals} de {totals.totalMeals} comidas · {totals.logCount} registros</p>
+        {burn ? (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-start justify-around gap-3 sm:justify-start sm:gap-5" data-rings>
+              <div className="flex shrink-0 flex-col items-center gap-1.5">
+                <Ring
+                  value={c.kcal}
+                  max={targets.kcal || Math.max(c.kcal, 1)}
+                  size={132}
+                  stroke={13}
+                  color={hasKcal ? (c.kcal > targets.kcal! * 1.1 ? 'rgb(var(--warn))' : 'rgb(var(--accent))') : 'rgb(var(--line))'}
+                  label={`${n0(c.kcal)} kilocalorías consumidas${hasKcal ? ` de ${n0(targets.kcal!)}` : ''}`}
+                >
+                  <span className="tabular text-[28px] font-bold leading-none tracking-tight">{n0(c.kcal)}</span>
+                  <span className="mt-1 text-[12px] font-medium text-ink2">{hasKcal ? `de ${n0(targets.kcal!)} kcal` : 'kcal'}</span>
+                </Ring>
+                {hasKcal ? (
+                  <span className="tabular text-[12px] font-medium text-ink2" data-intake-ring-caption>{`${n0(Math.abs(remaining))} ${remaining >= 0 ? 'restantes' : 'por encima'}`}</span>
+                ) : (
+                  <button type="button" className="text-[12px] font-semibold text-accent" onClick={() => navigate('perfil', { s: 'objetivos' })} data-intake-ring-caption>Ingeridas · Configurar</button>
+                )}
+              </div>
+              <BurnRing burn={burn} />
+            </div>
+            <p className="text-center text-[13px] text-ink3 sm:hidden">{totals.doneMeals} de {totals.totalMeals} comidas · {totals.logCount} registros</p>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center gap-5">
+            <Ring
+              value={c.kcal}
+              max={targets.kcal || Math.max(c.kcal, 1)}
+              size={132}
+              stroke={13}
+              color={hasKcal ? (c.kcal > targets.kcal! * 1.1 ? 'rgb(var(--warn))' : 'rgb(var(--accent))') : 'rgb(var(--line))'}
+              label={`${n0(c.kcal)} kilocalorías consumidas${hasKcal ? ` de ${n0(targets.kcal!)}` : ''}`}
+            >
+              <span className="tabular text-[28px] font-bold leading-none tracking-tight">{n0(c.kcal)}</span>
+              <span className="mt-1 text-[12px] font-medium text-ink2">{hasKcal ? `de ${n0(targets.kcal!)} kcal` : 'kcal'}</span>
+            </Ring>
+            <div className="sm:hidden">
+              {hasKcal ? (
+                <>
+                  <p className="tabular text-[22px] font-bold leading-tight">{n0(Math.abs(remaining))}</p>
+                  <p className="text-[14px] text-ink2">{remaining >= 0 ? 'kcal restantes' : 'kcal por encima del objetivo'}</p>
+                </>
+              ) : (
+                <button type="button" className="text-left text-[14px] font-semibold text-accent" onClick={() => navigate('perfil', { s: 'objetivos' })}>
+                  Sin objetivo calórico. Configurar
+                </button>
+              )}
+              <p className="mt-2 text-[13px] text-ink3">{totals.doneMeals} de {totals.totalMeals} comidas · {totals.logCount} registros</p>
+            </div>
+          </div>
+        )}
         <div className="flex-1 space-y-3.5">
           <div className="hidden items-baseline justify-between sm:flex">
             {hasKcal ? (

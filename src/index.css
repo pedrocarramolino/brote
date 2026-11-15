@@ -24,6 +24,7 @@
   --carbs: 58 109 176;
   --fat: 143 106 18;
   --warn: 150 92 0;
+  --burn: 207 96 30;
   --warn-soft: 252 242 222;
   --danger: 192 44 38;
   --raised: 255 255 255;
@@ -49,6 +50,7 @@
     --carbs: 110 160 230;
     --fat: 222 180 80;
     --warn: 240 175 70;
+    --burn: 255 146 72;
     --warn-soft: 56 42 14;
     --danger: 255 105 97;
     color-scheme: dark;
@@ -73,6 +75,7 @@
     --carbs: 110 160 230;
     --fat: 222 180 80;
     --warn: 240 175 70;
+    --burn: 255 146 72;
     --warn-soft: 56 42 14;
     --danger: 255 105 97;
     color-scheme: dark;

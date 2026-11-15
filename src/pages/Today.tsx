@@ -117,7 +117,7 @@ export function TodayPage({ dateParam }: { dateParam: string | null }) {
 
       <div className="grid grid-cols-1 gap-x-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="min-w-0">
-          <NutritionSummary totals={totals} targets={data.profile.targets} />
+          <NutritionSummary totals={totals} targets={data.profile.targets} burn={{ ...burn, onOpen: () => setBurnOpen(true) }} />
 
           <SectionTitle
             action={
