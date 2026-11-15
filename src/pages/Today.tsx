@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Activity, ChevronLeft, ChevronRight, Footprints, Plus, Scale, Sparkles } from 'lucide-react';
+import { Activity, ChevronLeft, ChevronRight, Flame, Footprints, Plus, Scale, Sparkles } from 'lucide-react';
 import type { FoodLogEntry, MealSlot, PlannedMeal } from '../types';
 import { PageHeader } from '../components/layout/AppShell';
 import { Card, IconButton, ProgressBar, SectionTitle } from '../components/ui/primitives';
@@ -22,6 +22,8 @@ import { LogFoodSheet } from '../features/log/LogFoodSheet';
 import { DishEditor } from '../features/dishes/DishEditor';
 import { PhotoLogSheet } from '../features/log/PhotoLogSheet';
 import { StepsSheet } from '../features/activity/StepsSheet';
+import { BurnSheet } from '../features/activity/BurnSheet';
+import { burnProgress } from '../services/burn';
 
 /** Comida que toca según la hora y los horarios del usuario. */
 function currentSlot(slots: MealSlot[], schedule: Partial<Record<MealSlot, string>>): MealSlot {
@@ -57,6 +59,7 @@ export function TodayPage({ dateParam }: { dateParam: string | null }) {
   const dishRecipe = dishToLog ? data.customRecipes.find((r) => r.id === dishToLog.id) ?? null : null;
   const [photoSlot, setPhotoSlot] = useState<MealSlot | null>(null);
   const [stepsOpen, setStepsOpen] = useState(false);
+  const [burnOpen, setBurnOpen] = useState(false);
 
   const liveRecipeMeal = recipeMeal ? meals.find((m) => m.id === recipeMeal.id) ?? recipeMeal : null;
   const liveSwapMeal = swapMeal ? meals.find((m) => m.id === swapMeal.id) ?? swapMeal : null;
@@ -66,6 +69,7 @@ export function TodayPage({ dateParam }: { dateParam: string | null }) {
 
   // Actividad
   const steps = data.steps.find((s) => s.date === date)?.steps;
+  const burn = burnProgress(data, date);
   const planDay = data.activityPlan.find((p) => p.weekday === weekdayIndex(date));
   const sessionsToday = data.sessions.filter((s) => s.date === date);
   const lastWeight = [...data.weights].filter((w) => w.date <= date).sort((a, b) => b.date.localeCompare(a.date))[0];
@@ -149,6 +153,25 @@ export function TodayPage({ dateParam }: { dateParam: string | null }) {
                     <p className="tabular text-[24px] font-bold leading-none">{n0(steps)}</p>
                     <p className="mb-2 mt-1 text-[13px] text-ink3">de {n0(data.profile.stepsTarget)}</p>
                     <ProgressBar value={steps} max={data.profile.stepsTarget} label="Pasos" height={5} />
+                  </>
+                ) : (
+                  <p className="text-[15px] text-ink2">Sin registrar. <span className="font-semibold text-accent">Añadir</span></p>
+                )}
+              </button>
+            </Card>
+            <Card as="div" className="p-0">
+              <button type="button" onClick={() => setBurnOpen(true)} className="w-full rounded-xl2 p-4 text-left hover:bg-surface2/40" data-burn-card>
+                <div className="mb-2 flex items-center gap-2 text-[13px] font-semibold text-ink2"><Flame size={16} /> Calorías quemadas</div>
+                {burn.burned > 0 || burn.target ? (
+                  <>
+                    <p className="tabular text-[24px] font-bold leading-none">{n0(burn.burned)} <span className="text-[14px] font-semibold text-ink3">kcal</span></p>
+                    <p className="mb-2 mt-1 text-[13px] text-ink3">{burn.target ? `de ${n0(burn.target)}` : burn.target === 0 ? 'objetivo cubierto con tu ingesta' : 'sin objetivo'}</p>
+                    {burn.target ? (
+                      <>
+                        <ProgressBar value={burn.burned} max={burn.target} label="Calorías quemadas" height={5} />
+                        <p className="tabular mt-1.5 text-[12px] text-ink3" data-burn-remaining>{burn.remaining ? `Faltan ${n0(burn.remaining)} kcal` : 'Objetivo cumplido'} · {burn.percent} %</p>
+                      </>
+                    ) : null}
                   </>
                 ) : (
                   <p className="text-[15px] text-ink2">Sin registrar. <span className="font-semibold text-accent">Añadir</span></p>
@@ -243,6 +266,7 @@ export function TodayPage({ dateParam }: { dateParam: string | null }) {
       />
       <PhotoLogSheet open={!!photoSlot} onClose={() => setPhotoSlot(null)} date={date} slot={photoSlot ?? defaultSlot} />
       <StepsSheet open={stepsOpen} onClose={() => setStepsOpen(false)} date={date} />
+      <BurnSheet open={burnOpen} onClose={() => setBurnOpen(false)} date={date} />
     </>
   );
 }

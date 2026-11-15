@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Activity, ChevronRight, ClipboardCopy, Cloud, Database, Download, FlaskConical, Plus, RefreshCw, Sparkles, Trash2 } from 'lucide-react';
-import type { Allergen, Habit, MealSlot, UserProfile } from '../types';
+import type { Allergen, BurnGoal, Habit, MealSlot, UserProfile } from '../types';
 import { PageHeader } from '../components/layout/AppShell';
 import { Badge, Button, Card, Chip, IconButton, Segmented, SelectField, Stepper, TextField, Toggle, cx } from '../components/ui/primitives';
 import { TagInput } from '../components/TagInput';
@@ -14,6 +14,7 @@ import { reviewDue } from '../services/weeklyReview';
 import { WeeklyReviewSheet } from '../features/review/WeeklyReview';
 import { ALL_SLOTS, SLOT_META } from '../services/catalog';
 import { EU_REFERENCE_INTAKE } from '../services/nutrition';
+import { BURN_LIMITS, SEDENTARY_FACTOR, burnTarget, latestWeightKg, restingKcal } from '../services/burn';
 import { regenerateFrom } from '../services/planner';
 import { defaultActivityPlan } from '../data/routines';
 import { ALLERGEN_LABELS } from '../data/foods';
@@ -252,6 +253,7 @@ export function ProfilePage({ section }: { section: string | null }) {
             <div><p className="text-[16px] font-medium">Objetivo de pasos</p><p className="text-[13px] text-ink2">Pasos al día</p></div>
             <Stepper label="objetivo de pasos" value={p.stepsTarget} min={2000} max={25000} step={500} format={(v) => n0(v)} onChange={(v) => set('stepsTarget', v)} />
           </div>
+          <BurnGoalEditor />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div><p className="text-[16px] font-medium">Objetivo de agua</p><p className="text-[13px] text-ink2">Vasos de 250 ml</p></div>
             <Stepper label="objetivo de agua" value={p.waterTarget} min={1} max={16} onChange={(v) => set('waterTarget', v)} />
@@ -476,5 +478,130 @@ function HabitsSection() {
         </div>
       </div>
     </Section>
+  );
+}
+
+/**
+ * Objetivo diario de calorías quemadas con actividad. Se calcula a partir del objetivo de ingesta
+ * (sin tocarlo), del déficit que se quiere conseguir y del gasto sin ejercicio estimado; solo pide
+ * los datos que faltan. También se puede fijar a mano.
+ */
+function BurnGoalEditor() {
+  const data = useData();
+  const { mutate } = useStore();
+  const { toast } = useFeedback();
+  const g = data.profile.burnGoal;
+  const intake = data.profile.targets.kcal;
+  const lastKg = latestWeightKg(data);
+  const [mode, setMode] = useState<BurnGoal['mode']>(g?.mode ?? 'calculado');
+  const [v, setV] = useState({ deficit: '', sex: '', age: '', heightCm: '', weightKg: '', kcal: '' });
+  const [err, setErr] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    setMode(g?.mode ?? 'calculado');
+    setV({
+      deficit: g?.deficit !== undefined ? String(g.deficit) : '',
+      sex: g?.sex ?? '',
+      age: g?.age ? String(g.age) : '',
+      heightCm: g?.heightCm ? String(g.heightCm) : '',
+      weightKg: g?.weightKg ? String(g.weightKg).replace('.', ',') : lastKg ? String(lastKg).replace('.', ',') : '',
+      kcal: g?.kcal ? String(g.kcal) : '',
+    });
+    setErr({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [g?.updatedAt]);
+
+  const num = (k: keyof typeof v) => parseDecimal(v[k]);
+  const inRange = (n: number, [lo, hi]: readonly [number, number]) => Number.isFinite(n) && n >= lo && n <= hi;
+  const ready = !!intake && v.sex && inRange(num('deficit'), BURN_LIMITS.deficit) && inRange(num('age'), BURN_LIMITS.age) && inRange(num('heightCm'), BURN_LIMITS.heightCm) && inRange(num('weightKg'), BURN_LIMITS.weightKg);
+  const resting = ready ? restingKcal(v.sex as NonNullable<BurnGoal['sex']>, num('weightKg'), num('heightCm'), num('age')) : 0;
+  const baseline = resting * SEDENTARY_FACTOR;
+  const preview = ready ? Math.max(0, Math.round((intake! + num('deficit') - baseline) / 10) * 10) : null;
+  const current = burnTarget(data);
+
+  const save = () => {
+    const e: Record<string, string> = {};
+    const now = new Date().toISOString();
+    let next: BurnGoal;
+    if (mode === 'manual') {
+      const k = num('kcal');
+      if (!inRange(k, BURN_LIMITS.manual)) e.kcal = `Entre ${BURN_LIMITS.manual[0]} y ${n0(BURN_LIMITS.manual[1])} kcal.`;
+      next = { ...(g ?? {}), mode, kcal: Math.round(k), updatedAt: now };
+    } else {
+      if (!v.sex) e.sex = 'Elige una opción.';
+      (['deficit', 'age', 'heightCm', 'weightKg'] as const).forEach((k) => {
+        if (!inRange(num(k), BURN_LIMITS[k])) e[k] = `Entre ${BURN_LIMITS[k][0]} y ${n0(BURN_LIMITS[k][1])}.`;
+      });
+      next = { ...(g ?? {}), mode, deficit: Math.round(num('deficit')), sex: v.sex as BurnGoal['sex'], age: Math.round(num('age')), heightCm: Math.round(num('heightCm')), weightKg: Math.round(num('weightKg') * 10) / 10, updatedAt: now };
+    }
+    setErr(e);
+    if (Object.keys(e).length) return;
+    mutate((d) => void (d.profile.burnGoal = next));
+    toast('Objetivo de calorías quemadas guardado');
+  };
+
+  return (
+    <div className="rounded-[16px] bg-surface2/50 p-4 ring-1 ring-line/60" data-burn-goal>
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="text-[16px] font-medium">Objetivo de calorías quemadas</p>
+          <p className="text-[13px] text-ink2">Con actividad, al día. No se suma a lo que puedes comer.</p>
+        </div>
+        <span data-burn-goal-current><Badge tone={current.kcal !== null ? 'accent' : 'neutral'}>{current.kcal !== null ? `${n0(current.kcal)} kcal` : 'Sin objetivo'}</Badge></span>
+      </div>
+      <Segmented label="Cómo fijar el objetivo" value={mode} onChange={(m) => { setMode(m); setErr({}); }} options={[{ value: 'calculado', label: 'Calcular' }, { value: 'manual', label: 'Fijarlo yo' }]} />
+
+      {mode === 'manual' ? (
+        <TextField className="mt-3" label="Calorías a quemar al día" inputMode="numeric" suffix="kcal" value={v.kcal} onChange={(e) => setV({ ...v, kcal: e.target.value })} error={err.kcal} placeholder="Por ejemplo: 400" data-burn-manual />
+      ) : !intake ? (
+        <div className="mt-3 rounded-[12px] bg-warnSoft px-3 py-2.5 text-[13px] leading-snug text-warn" data-burn-needs-intake>
+          Para calcularlo hace falta tu objetivo de energía (lo que comes al día).{' '}
+          <button type="button" className="font-semibold underline" onClick={() => document.getElementById('objetivos')?.scrollIntoView({ behavior: 'smooth' })}>Defínelo en Objetivos nutricionales</button> o fija el objetivo a mano.
+        </div>
+      ) : (
+        <div className="mt-3 space-y-3">
+          <div>
+            <p className="mb-1.5 text-[14px] font-semibold text-ink2">Déficit diario que quieres conseguir</p>
+            <div className="flex flex-wrap gap-2">
+              {[0, 250, 500, 750].map((d) => (
+                <Chip key={d} selected={v.deficit === String(d)} onClick={() => setV({ ...v, deficit: String(d) })}>{d === 0 ? 'Ninguno (mantener)' : `${d} kcal`}</Chip>
+              ))}
+            </div>
+            {err.deficit && <p className="mt-1 text-[13px] text-danger">Elige el déficit.</p>}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <SelectField label="Sexo" value={v.sex} onChange={(e) => setV({ ...v, sex: e.target.value })} data-burn-sex>
+              <option value="">Elegir</option>
+              <option value="mujer">Mujer</option>
+              <option value="hombre">Hombre</option>
+              <option value="otro">Prefiero no decirlo</option>
+            </SelectField>
+            <TextField label="Edad" inputMode="numeric" suffix="años" value={v.age} onChange={(e) => setV({ ...v, age: e.target.value })} error={err.age} data-burn-age />
+            <TextField label="Altura" inputMode="numeric" suffix="cm" value={v.heightCm} onChange={(e) => setV({ ...v, heightCm: e.target.value })} error={err.heightCm} data-burn-height />
+            <TextField label="Peso" inputMode="decimal" suffix="kg" value={v.weightKg} onChange={(e) => setV({ ...v, weightKg: e.target.value })} error={err.weightKg} hint={lastKg ? `Último registrado: ${String(lastKg).replace('.', ',')} kg` : undefined} data-burn-weight />
+          </div>
+          {err.sex && <p className="text-[13px] text-danger">{err.sex}</p>}
+          <p className="tabular rounded-[12px] bg-surface px-3 py-2.5 text-[13px] leading-snug text-ink2" data-burn-breakdown>
+            {preview !== null ? (
+              <>
+                Gasto sin ejercicio ≈ <strong className="text-ink">{n0(baseline)} kcal</strong> (reposo {n0(resting)} × {String(SEDENTARY_FACTOR).replace('.', ',')}).<br />
+                {n0(intake)} de ingesta + {n0(num('deficit'))} de déficit − {n0(baseline)} = <strong className="text-ink">{n0(preview)} kcal a quemar</strong>.
+                {preview === 0 && ' Con tu ingesta objetivo ya consigues ese déficit sin ejercicio.'}
+                {preview > 1000 && ' Es un objetivo muy exigente: valora un déficit menor o revisar tu ingesta con un profesional.'}
+              </>
+            ) : (
+              <>Se calcula con tu objetivo de ingesta ({n0(intake)} kcal), el déficit que elijas y tu gasto sin ejercicio (ecuación de Mifflin-St Jeor × 1,2). Completa los datos para verlo.</>
+            )}
+          </p>
+        </div>
+      )}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button size="sm" onClick={save} disabled={mode === 'calculado' && !intake} data-save-burn-goal>Guardar objetivo</Button>
+        {g && (
+          <Button size="sm" variant="secondary" onClick={() => { mutate((d) => void delete d.profile.burnGoal); toast('Objetivo de calorías quemadas eliminado'); }}>Quitar objetivo</Button>
+        )}
+      </div>
+      <p className="mt-2 text-[12px] leading-snug text-ink3">Es una estimación orientativa: el gasto real varía de una persona a otra. Si tienes una condición de salud, consúltalo con un profesional.</p>
+    </div>
   );
 }

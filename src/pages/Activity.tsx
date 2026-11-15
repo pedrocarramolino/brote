@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, Dumbbell, Footprints, Home, Moon, Pencil, Plus, Trash2, TreePine } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Dumbbell, Flame, Footprints, Home, Moon, Pencil, Plus, Trash2, TreePine } from 'lucide-react';
 import type { ActivitySession, ActivityType, ISODate } from '../types';
 import { PageHeader } from '../components/layout/AppShell';
 import { Badge, Button, Card, DemoBadge, IconButton, ProgressBar, SectionTitle, Segmented, SelectField, TextField, cx } from '../components/ui/primitives';
@@ -11,6 +11,8 @@ import { n0, uid } from '../lib/format';
 import { navigate } from '../lib/router';
 import { DEMO_ROUTINES } from '../data/routines';
 import { StepsSheet } from '../features/activity/StepsSheet';
+import { BurnSheet } from '../features/activity/BurnSheet';
+import { burnedOn, burnTarget } from '../services/burn';
 
 const TYPE_META: Record<ActivityType, { label: string; icon: typeof Home }> = {
   casa: { label: 'En casa', icon: Home },
@@ -28,6 +30,7 @@ export function ActivityPage({ weekParam }: { weekParam: string | null }) {
   const [planDay, setPlanDay] = useState<number | null>(null);
   const [session, setSession] = useState<{ date: ISODate; entry: ActivitySession | null } | null>(null);
   const [stepsDate, setStepsDate] = useState<ISODate | null>(null);
+  const [burnDate, setBurnDate] = useState<ISODate | null>(null);
   const [routineId, setRoutineId] = useState<string | null>(null);
 
   const weekSessions = data.sessions.filter((s) => s.date >= monday && s.date <= addDays(monday, 6));
@@ -35,6 +38,9 @@ export function ActivityPage({ weekParam }: { weekParam: string | null }) {
   const plannedMin = data.activityPlan.reduce((a, d) => a + d.minutes, 0);
   const stepsWeek = weekDates(monday).map((d) => data.steps.find((s) => s.date === d)?.steps ?? 0);
   const maxSteps = Math.max(data.profile.stepsTarget, ...stepsWeek);
+  const burnGoal = burnTarget(data).kcal;
+  const burnWeek = weekDates(monday).map((d) => burnedOn(data, d));
+  const maxBurn = Math.max(burnGoal ?? 0, ...burnWeek, 1);
 
   return (
     <>
@@ -146,6 +152,33 @@ export function ActivityPage({ weekParam }: { weekParam: string | null }) {
             </div>
             <Button className="mt-3 w-full" size="sm" variant="secondary" onClick={() => setStepsDate(today)}>Registrar pasos de hoy</Button>
           </Card>
+          <Card className="p-5" data-burn-week>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-[15px] font-semibold"><Flame size={17} /> Calorías quemadas</h2>
+              <span className="text-[12px] text-ink3">{burnGoal ? `Obj. ${n0(burnGoal)} kcal` : 'Sin objetivo'}</span>
+            </div>
+            <div className="flex h-28 items-end gap-1.5">
+              {weekDates(monday).map((d, i) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => d <= today && setBurnDate(d)}
+                  disabled={d > today}
+                  aria-label={`${formatLong(d)}: ${burnWeek[i] ? `${n0(burnWeek[i])} kcal quemadas` : 'sin registrar'}. Editar`}
+                  className="group flex h-full flex-1 flex-col items-center justify-end gap-1 disabled:opacity-40"
+                >
+                  <span className="relative w-full flex-1">
+                    <span
+                      className={cx('absolute bottom-0 w-full rounded-t-[4px] transition-all', burnGoal && burnWeek[i] >= burnGoal ? 'bg-accent' : 'bg-accent/45', 'group-hover:brightness-110')}
+                      style={{ height: `${(burnWeek[i] / maxBurn) * 100}%`, minHeight: burnWeek[i] ? 3 : 0 }}
+                    />
+                  </span>
+                  <span className={cx('text-[11px] font-semibold', d === today ? 'text-accent' : 'text-ink3')}>{formatWeekdayShort(d).slice(0, 1)}</span>
+                </button>
+              ))}
+            </div>
+            <Button className="mt-3 w-full" size="sm" variant="secondary" onClick={() => setBurnDate(today)}>Registrar calorías quemadas</Button>
+          </Card>
           <Card className="p-5">
             <h2 className="mb-2 text-[15px] font-semibold">Rutinas <DemoBadge className="ml-1" /></h2>
             <ul className="space-y-1">
@@ -165,6 +198,7 @@ export function ActivityPage({ weekParam }: { weekParam: string | null }) {
       <PlanDaySheet weekday={planDay} onClose={() => setPlanDay(null)} />
       <SessionSheet open={!!session} date={session?.date ?? today} entry={session?.entry ?? null} onClose={() => setSession(null)} />
       <StepsSheet open={!!stepsDate} date={stepsDate ?? today} onClose={() => setStepsDate(null)} />
+      <BurnSheet open={!!burnDate} date={burnDate ?? today} onClose={() => setBurnDate(null)} />
       <RoutineSheet id={routineId} onClose={() => setRoutineId(null)} />
     </>
   );

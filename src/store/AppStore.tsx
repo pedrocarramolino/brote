@@ -31,6 +31,7 @@ function migrate(d: AppData): AppData {
   // base de alimentos con valores oficiales: congelar el historial anterior con sus valores originales
   migrateFoodDb(out, todayISO());
   out.shopping ??= {};
+  out.burned ??= [];
   // Revisión semanal: los datos anteriores a esta función empiezan con la semana actual revisada
   if (out.onboarded && !out.weeklyReview) out.weeklyReview = { lastCompleted: startOfWeek(todayISO()) };
   out.version = DATA_VERSION;

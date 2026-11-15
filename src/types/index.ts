@@ -47,6 +47,8 @@ export interface UserProfile {
   training?: TrainingPref;
   region: string; // 'ES'
   stepsTarget: number;
+  /** objetivo de calorías quemadas con actividad (opcional) */
+  burnGoal?: BurnGoal;
   waterTarget: number; // vasos de 250 ml
   targets: NutritionTargets;
   /** Consentimiento explícito para enviar contexto a servicios externos */
@@ -315,6 +317,35 @@ export interface ActivitySession {
 
 export interface StepsEntry { date: ISODate; steps: number; demo?: boolean }
 
+/** Calorías quemadas con actividad (ejercicio, paseos…) anotadas a mano. Varias por día. */
+export interface BurnEntry {
+  id: string;
+  date: ISODate;
+  kcal: number;
+  /** p. ej. «Correr», «Pádel» (opcional) */
+  note?: string;
+  createdAt: string;
+}
+
+/**
+ * Objetivo diario de calorías quemadas con actividad (no es el gasto energético total).
+ * - 'calculado': ingesta objetivo + déficit deseado − gasto sin ejercicio (Mifflin-St Jeor × 1,2)
+ * - 'manual': cifra fijada por el usuario
+ */
+export interface BurnGoal {
+  mode: 'calculado' | 'manual';
+  /** objetivo fijado a mano (modo manual) */
+  kcal?: number;
+  /** déficit diario que se quiere conseguir, kcal */
+  deficit?: number;
+  sex?: 'mujer' | 'hombre' | 'otro';
+  age?: number;
+  heightCm?: number;
+  /** peso usado en el cálculo (se propone el último registrado) */
+  weightKg?: number;
+  updatedAt: string;
+}
+
 export interface ShoppingManualItem {
   id: string;
   name: string;
@@ -355,6 +386,8 @@ export interface AppData {
   activityPlan: ActivityPlanDay[];
   sessions: ActivitySession[];
   steps: StepsEntry[];
+  /** calorías quemadas anotadas (independientes de lo que se come) */
+  burned: BurnEntry[];
   shopping: Record<string, ShoppingOverrides>; // clave: lunes de la semana
   favorites: { recipes: string[]; foods: string[] };
   /** Versión de la base de alimentos con la que se guardaron los registros (ver migración en AppStore). */
