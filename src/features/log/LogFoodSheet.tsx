@@ -8,11 +8,11 @@ import { getFood, SLOT_META, slotsOrdered } from '../../services/catalog';
 import { foodMacros, recipeNutrition, scaleMacros } from '../../services/nutrition';
 import { defaultQuantity, dishLogEntry, unitSize, userDishes } from '../../services/dishes';
 import { QuantityEditor, fmtQty, qtyFromBase, qtyToBase, type QtyValue } from '../meals/QuantityEditor';
-import { recipeTitle } from '../../services/recipeMeta';
+import { recipeMatches, recipeTitle } from '../../services/recipeMeta';
 import { RecipeCover } from '../meals/RecipeBits';
 import { SOURCE_LABEL } from '../../services/foodDatabase';
 import { useFoodSearch } from './useFoodSearch';
-import { n0, parseDecimal, servingsLabel } from '../../lib/format';
+import { n0, normalize, parseDecimal, servingsLabel } from '../../lib/format';
 import { relativeDayLabel } from '../../lib/dates';
 import { MacroGrid } from '../meals/RecipeBits';
 import { useMealActions } from '../meals/useMealActions';
@@ -111,6 +111,12 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
   const dishPerServing = editEntry?.snapshot ? editEntry.snapshot.perServing : dish ? recipeNutrition(data, dish).macros : null;
   const dishPreview = dishPerServing && validServings ? scaleMacros(dishPerServing, servings) : null;
   const myDishes = useMemo(() => userDishes(data), [data]);
+  // platos propios que coinciden con lo buscado: aparecen arriba de los alimentos
+  const dishHits = useMemo(() => {
+    const nq = normalize(query.trim());
+    if (nq.length < 2) return [];
+    return myDishes.filter((r) => recipeMatches(data, r, nq, normalize)).slice(0, 5);
+  }, [myDishes, query, data]);
 
   const saveDish = () => {
     if (!validServings) return;
@@ -144,6 +150,7 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
     <Sheet
       open={open}
       onClose={onClose}
+      fill={view === 'list'}
       title={editEntry ? 'Editar registro' : view === 'custom' ? 'Alimento personalizado' : view === 'dish' ? 'Registrar mi plato' : 'Añadir alimento'}
       subtitle={`${relativeDayLabel(date)} · ${SLOT_META[slot].label}`}
       footer={
@@ -238,9 +245,33 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
                 })}
               </ul>
             )
-          ) : list.length === 0 ? (
+          ) : (<>
+          {tab === 'buscar' && dishHits.length > 0 && (
+            <div className="mb-2" data-dish-hits>
+              <p className="pb-1 text-[12px] font-semibold uppercase tracking-wide text-ink3">Mis platos</p>
+              <ul className="divide-y divide-line/60">
+                {dishHits.map((r) => {
+                  const m = recipeNutrition(data, r).macros;
+                  return (
+                    <li key={r.id}>
+                      <button type="button" onClick={() => { setDish(r); setServingsText('1'); setView('dish'); }} className="flex min-h-[56px] w-full items-center gap-3 py-2 text-left hover:bg-surface2/50" data-pick-dish={r.id}>
+                        <RecipeCover recipe={r} size={40} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[16px] font-medium">{recipeTitle(r)}</span>
+                          <span className="tabular block text-[13px] text-ink3">{n0(m.kcal)} kcal por ración · Mi plato</span>
+                        </span>
+                        <ChevronRight size={18} className="shrink-0 text-ink3" aria-hidden="true" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="pb-1 pt-3 text-[12px] font-semibold uppercase tracking-wide text-ink3">Alimentos</p>
+            </div>
+          )}
+          {list.length === 0 ? (
             <p className="py-8 text-center text-[15px] text-ink2">
-              {tab === 'favoritos' ? 'Aún no tienes alimentos favoritos. Márcalos con el corazón al añadirlos.' : tab === 'recientes' ? 'Todavía no has registrado alimentos.' : 'Sin resultados en la base local. Puedes crear el alimento.'}
+              {tab === 'favoritos' ? 'Aún no tienes alimentos favoritos. Márcalos con el corazón al añadirlos.' : tab === 'recientes' ? 'Todavía no has registrado alimentos.' : query.trim() ? 'Sin resultados en la base de alimentos. Puedes crear el alimento.' : 'Escribe para buscar un alimento o uno de tus platos.'}
             </p>
           ) : (
             <ul className="divide-y divide-line/60">
@@ -249,6 +280,7 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
               ))}
             </ul>
           )}
+          </>)}
 
           {tab === 'buscar' && <FoodSourcesNote />}
         </div>

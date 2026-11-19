@@ -38,6 +38,13 @@ const DESSERTS: { foodId: string; months?: number[]; weight?: number }[] = [
   { foodId: 'granada', months: [9, 10, 11, 12] }, { foodId: 'caqui', months: [10, 11, 12] },
   { foodId: 'yogur', weight: 0.5 }, { foodId: 'yogur_griego', weight: 0.4 },
 ];
+/**
+ * Carne procesada (embutidos, bacon, hamburguesas de carne grasa o empanadas): la dieta
+ * mediterránea la reserva para ocasiones. El planificador propone como mucho una por semana.
+ */
+const PROCESSED = new Set(['chorizo', 'salchichon', 'fuet', 'panceta', 'bacon', 'hamburguesa_ternera', 'hamburguesa_vacuno_85', 'hamburguesa_vacuno_75', 'hamburguesa_vacuno_70', 'hamburguesa_mixta', 'hamburguesa_wagyu', 'hamburguesa_cerdo', 'hamburguesa_pollo_empanada', 'salchichas_pollo']);
+const isProcessed = (r: Recipe) => r.ingredients.some((i) => PROCESSED.has(i.foodId) && i.amount >= 30);
+
 /** Proporción aproximada de comidas y cenas con postre. */
 const DESSERT_RATE = 0.5;
 const FRUIT_IDS = new Set(DESSERTS.filter((x) => !x.weight).map((x) => x.foodId).concat(['frutos_rojos', 'frambuesas', 'mango']));
@@ -189,6 +196,7 @@ export function generateWeek(data: AppData, monday: ISODate, opts: GenerateOptio
   };
 
   const usedWeek = new Map<string, number>();
+  let processedCount = 0;
   const mainCount = new Map<MainIngredient, number>();
   const ingredientUse = new Map<string, number>();
   const out: PlannedMeal[] = [];
@@ -199,6 +207,7 @@ export function generateWeek(data: AppData, monday: ISODate, opts: GenerateOptio
     if (!r) return;
     usedWeek.set(r.id, (usedWeek.get(r.id) ?? 0) + 1);
     if (isMain(m.slot)) mainCount.set(r.main, (mainCount.get(r.main) ?? 0) + 1);
+    if (isMain(m.slot) && isProcessed(r)) processedCount++;
     for (const i of r.ingredients) if (!PANTRY.has(i.foodId) && i.amount >= 25) ingredientUse.set(i.foodId, (ingredientUse.get(i.foodId) ?? 0) + 1);
   };
   const keep = opts.keep ?? [];
@@ -274,6 +283,9 @@ export function generateWeek(data: AppData, monday: ISODate, opts: GenerateOptio
           if (r.main === 'huevo' && eggs < 2) score += 3;
           if (RED_MEAT.has(r.main) && red >= 3) score -= 18;
           if (!vegan && !ANIMAL_MAIN.has(r.main) && r.main !== 'legumbre' && r.main !== 'huevo') score -= 3;
+          // patrón mediterráneo: carne procesada como mucho una vez por semana; cocina de aquí, un poco por delante
+          if (isProcessed(r)) score -= 6 + processedCount * 40;
+          if (r.cuisine === 'espanola' || r.cuisine === 'mediterranea') score += 3;
           score += Math.min(inf.veg, 250) / 25; // hasta +10 por verdura
           if (slot === 'cena' && r.tags.includes('ligera')) score += 3;
           // entre semana, mejor recetas que no lleven toda la tarde

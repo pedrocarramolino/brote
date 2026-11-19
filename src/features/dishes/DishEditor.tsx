@@ -21,7 +21,7 @@ import { useFoodSearch } from '../log/useFoodSearch';
  * «Crear mi plato»: nombre, ingredientes con cantidad y unidad, raciones y resumen
  * nutricional en tiempo real. Sirve también para editar un plato guardado.
  */
-export function DishEditor({ open, onClose, recipe, onSaved, initialName, template }: {
+export function DishEditor({ open, onClose, recipe, onSaved, initialName, template, initialCategory }: {
   open: boolean;
   onClose: () => void;
   recipe?: Recipe | null;
@@ -30,6 +30,8 @@ export function DishEditor({ open, onClose, recipe, onSaved, initialName, templa
   initialName?: string;
   /** receta de la biblioteca de la que partir: se crea un plato NUEVO («mi versión»); la receta no cambia */
   template?: Recipe | null;
+  /** categoría propuesta para un plato nuevo (p. ej. la de la comida que se está cambiando) */
+  initialCategory?: DishDraft['category'];
 }) {
   const data = useData();
   const { mutate } = useStore();
@@ -50,7 +52,7 @@ export function DishEditor({ open, onClose, recipe, onSaved, initialName, templa
       ? draftFromRecipe(recipe)
       : template
         ? { ...draftFromRecipe(template), id: undefined, name: `${template.title ?? template.name} (mi versión)`.slice(0, 80), imageUrl: undefined }
-        : { ...emptyDraft(), name: initialName?.slice(0, 80) ?? '' };
+        : { ...emptyDraft(), name: initialName?.slice(0, 80) ?? '', ...(initialCategory ? { category: initialCategory } : {}) };
     setDraft(d);
     setQtyText(d.items.map((i) => fmt(i.quantity)));
     setInitial(JSON.stringify(d));
@@ -148,6 +150,7 @@ export function DishEditor({ open, onClose, recipe, onSaved, initialName, templa
       open={open}
       onClose={close}
       size="lg"
+      fill={view === 'pick'}
       title={view === 'pick' ? (replacing !== null ? 'Sustituir ingrediente' : 'Añadir ingrediente') : view === 'newfood' ? 'Nuevo alimento' : recipe ? 'Editar plato' : template ? 'Mi versión' : 'Crear mi plato'}
       subtitle={view === 'form' ? 'Ingredientes y cantidades del plato completo' : undefined}
       footer={
@@ -208,14 +211,17 @@ export function DishEditor({ open, onClose, recipe, onSaved, initialName, templa
                   const u = food ? unitSize(food) : null;
                   return (
                     <li key={idx} className="px-3 py-2.5" data-dish-row={it.foodId}>
-                      <div className="flex items-start gap-2">
-                        <button type="button" className="min-w-0 flex-1 text-left" onClick={() => { setReplacing(idx); setView('pick'); }} aria-label={`Sustituir ${food?.name ?? 'ingrediente'}`}>
+                      <div className="flex items-start gap-1">
+                        <div className="min-w-0 flex-1">
                           <span className="block truncate text-[15px] font-semibold">{food?.name ?? 'Alimento no encontrado'}</span>
-                          <span className="tabular block text-[12px] text-ink3">
-                            {row?.macros ? `${n0(row.macros.kcal)} kcal · P ${n1(row.macros.protein)} · H ${n1(row.macros.carbs)} · G ${n1(row.macros.fat)}` : 'Sin calcular'}
-                            {row?.base !== null && row?.base !== undefined && it.unit !== food?.unit ? ` · ${n0(row.base)} ${food?.unit}` : ''}
+                          <span className="tabular block text-[12px] text-ink3" data-dish-row-summary>
+                            <span className="font-semibold text-ink2">{qtyText[idx] || '0'} {UNIT_LABEL[it.unit].short}{row?.base !== null && row?.base !== undefined && it.unit !== food?.unit ? ` (${n0(row.base)} ${food?.unit})` : ''}</span>
+                            {' · '}{row?.macros ? `${n0(row.macros.kcal)} kcal · P ${n1(row.macros.protein)} · H ${n1(row.macros.carbs)} · G ${n1(row.macros.fat)}` : 'sin calcular'}
                           </span>
-                        </button>
+                        </div>
+                        <IconButton label={`Sustituir ${food?.name ?? 'ingrediente'}`} onClick={() => { setReplacing(idx); setView('pick'); }} className="!h-9 !w-9 text-accent">
+                          <RefreshCw size={16} />
+                        </IconButton>
                         <IconButton label={`Quitar ${food?.name ?? 'ingrediente'}`} onClick={() => remove(idx)} className="!h-9 !w-9 text-ink3">
                           <Trash2 size={17} />
                         </IconButton>
@@ -224,7 +230,7 @@ export function DishEditor({ open, onClose, recipe, onSaved, initialName, templa
                         <IconButton label={`Menos ${food?.name ?? ''}`} onClick={() => bump(idx, -1)} onPointerDown={(e) => e.preventDefault()} className="!w-9 bg-surface ring-1 ring-line/70" data-qty-minus>
                           <Minus size={16} />
                         </IconButton>
-                        <label className={cx('flex h-11 w-[72px] items-center rounded-[10px] bg-surface px-2.5 ring-1', bad ? 'ring-warn' : 'ring-line/70', 'focus-within:ring-2 focus-within:ring-accent')}>
+                        <label className={cx('flex h-11 w-[88px] shrink-0 items-center rounded-[10px] bg-surface px-1.5 ring-1', bad ? 'ring-warn' : 'ring-line/70', 'focus-within:ring-2 focus-within:ring-accent')}>
                           <span className="sr-only">Cantidad de {food?.name}</span>
                           <input
                             inputMode="decimal"
@@ -238,21 +244,18 @@ export function DishEditor({ open, onClose, recipe, onSaved, initialName, templa
                         <IconButton label={`Más ${food?.name ?? ''}`} onClick={() => bump(idx, 1)} onPointerDown={(e) => e.preventDefault()} className="!w-9 bg-surface ring-1 ring-line/70" data-qty-plus>
                           <Plus size={16} />
                         </IconButton>
-                        <label className="relative">
+                        <label className="relative min-w-0 flex-1">
                           <span className="sr-only">Unidad</span>
                           <select
                             value={it.unit}
                             onChange={(e) => setUnit(idx, e.target.value as QtyUnit)}
-                            className="h-11 max-w-[128px] appearance-none rounded-[10px] bg-surface pl-3 pr-8 text-[15px] ring-1 ring-line/70"
+                            className="h-11 w-full min-w-0 appearance-none rounded-[10px] bg-surface pl-3 pr-8 text-[15px] ring-1 ring-line/70"
                             data-unit
                           >
                             {units.map((x) => <option key={x} value={x}>{UNIT_LABEL[x].long}</option>)}
                           </select>
                           <ChevronDown size={16} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-ink3" />
                         </label>
-                        <button type="button" onClick={() => { setReplacing(idx); setView('pick'); }} className="ml-auto inline-flex h-11 items-center gap-1 rounded-full px-2 text-[13px] font-semibold text-accent" aria-label="Sustituir ingrediente">
-                          <RefreshCw size={15} /> <span className="hidden xs:inline">Cambiar</span>
-                        </button>
                       </div>
                       {food && it.unit === 'unidad' && u && <p className="mt-1 text-[12px] text-ink3">1 unidad ≈ {n0(u)} {food.unit} ({food.portion?.label})</p>}
                       {food && bad && it.quantity > 0 && toBaseAmount(food, it.quantity, it.unit) === null && (
@@ -362,6 +365,9 @@ function IngredientPicker({ onPick, onCreate, onBack }: { onPick: (f: Food) => v
   const data = useData();
   const [q, setQ] = useState('');
   const { local: list } = useFoodSearch(data, q);
+  // la hoja ya estaba abierta: el foco automático de la hoja no actúa al cambiar de vista
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => inputRef.current?.focus({ preventScroll: true }), []);
   return (
     <div className="anim-fade">
       <div className="sticky top-0 z-10 -mx-5 bg-surface px-5 pb-3">
@@ -370,20 +376,20 @@ function IngredientPicker({ onPick, onCreate, onBack }: { onPick: (f: Food) => v
           <label className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-[12px] bg-surface2 px-3 focus-within:ring-2 focus-within:ring-accent">
             <Search size={18} className="text-ink3" aria-hidden="true" />
             <span className="sr-only">Buscar alimento</span>
-            <input data-autofocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Leche, queso, pollo…" className="h-full w-full bg-transparent text-[17px] placeholder:text-ink3 focus:outline-none" type="search" enterKeyHint="search" data-ingredient-search />
+            <input ref={inputRef} data-autofocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Leche, queso, pollo…" className="h-full w-full bg-transparent text-[17px] placeholder:text-ink3 focus:outline-none" type="search" enterKeyHint="search" data-ingredient-search />
           </label>
         </div>
       </div>
-      <button type="button" onClick={onCreate} className="press mb-2 flex w-full items-center gap-2 rounded-[14px] bg-surface2 px-3 py-3 text-left text-[14px] font-semibold">
-        <Plus size={18} className="text-accent" /> ¿No está? Crea el alimento con sus valores por 100 g
-      </button>
       {list.length === 0 ? (
-        <p className="py-6 text-center text-[15px] text-ink2">Sin resultados en la base de alimentos. Puedes crearlo con los datos de la etiqueta.</p>
+        <p className="py-6 text-center text-[15px] text-ink2">{q.trim() ? 'Sin resultados en la base de alimentos.' : 'Escribe para buscar.'}</p>
       ) : (
         <ul className="divide-y divide-line/60" data-ingredient-results>
           {list.map((f) => <FoodRow key={f.id} food={f} onClick={() => onPick(f)} />)}
         </ul>
       )}
+      <button type="button" onClick={onCreate} className="mt-2 flex min-h-[44px] w-full items-center gap-2 rounded-[12px] px-1 text-left text-[14px] font-semibold text-accent" data-create-food>
+        <Plus size={17} /> ¿No está? Créalo con los valores de su etiqueta
+      </button>
       <FoodSourcesNote />
     </div>
   );

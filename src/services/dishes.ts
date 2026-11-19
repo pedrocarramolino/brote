@@ -86,7 +86,11 @@ export function allowedUnits(food: Food): QtyUnit[] {
 export function defaultQuantity(food: Food): { quantity: number; unit: QtyUnit } {
   const u = unitSize(food);
   if (u && food.portion && /^1\s/.test(food.portion.label)) return { quantity: 1, unit: 'unidad' };
-  return { quantity: food.portion?.amount ?? 100, unit: food.unit };
+  if (food.portion) return { quantity: food.portion.amount, unit: food.unit };
+  // sin ración en la base: una cantidad de partida razonable según el tipo (se puede cambiar)
+  const g = food.group ?? '';
+  const start = /Aceites y grasas/.test(g) ? 10 : /Salsas|Azúcares y dulces/.test(g) ? 15 : /Frutos secos/.test(g) ? 25 : /Quesos/.test(g) ? 30 : 100;
+  return { quantity: start, unit: food.unit };
 }
 
 export interface DishRow {

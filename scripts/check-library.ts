@@ -9,6 +9,8 @@ import { COMIDAS_V5 } from '../src/data/recipeLibrary/v5/comidas';
 import { CENAS_V5 } from '../src/data/recipeLibrary/v5/cenas';
 import { GNOCCHI_CENA, GNOCCHI_COMIDA } from '../src/data/recipeLibrary/v5/gnocchi';
 import CURATED from '../src/data/foodDb/curated.json';
+import { starchGrams, vegGrams } from '../src/data/recipeLibrary/mediterranean';
+import { equivalencesFor, familyOf } from '../src/services/equivalences';
 import { BASE_FOODS } from '../src/data/foods';
 import { baseProfile, createUserData } from '../src/data/demo';
 import { acceptWeek, candidatesFor, generateWeek, regenerateDay, regenerateWeek } from '../src/services/planner';
@@ -234,6 +236,53 @@ simulate('sin pescado ni lactosa, 30 min', { allergies: ['pescado', 'marisco', '
   if (withoutRecent.length) problems.push(`Recetas v5 sin ninguno de los últimos alimentos: ${withoutRecent.map((r) => r.id).join(', ')}`);
   if (gnocchi.length < 12) problems.push(`Pocas recetas con gnocchi (${gnocchi.length})`);
   if (used.size < 80) problems.push(`Las recetas v5 usan pocos alimentos nuevos distintos (${used.size})`);
+}
+
+// ---------------------------------------------------------------------------
+// Patrón de dieta mediterránea en las comidas de mediodía y en el menú
+{
+  const lunches = RECIPE_LIBRARY.filter((r) => r.slots.includes('comida'));
+  const noVeg = lunches.filter((r) => vegGrams(r) < 60).map((r) => r.id);
+  const noStarch = lunches.filter((r) => starchGrams(r) < 25).map((r) => r.id);
+  const d = createUserData(baseProfile({ name: 'Mediterránea', targets: { kcal: 2000 } } as Partial<UserProfile>));
+  d.plan = {};
+  let monday = startOfWeek('2026-03-02');
+  const weeks: { fish: number; legumes: number; red: number; processed: number }[] = [];
+  const PROC = /^(chorizo|salchichon|fuet|panceta|bacon|salchichas_pollo|hamburguesa_(ternera|vacuno_85|vacuno_75|vacuno_70|mixta|wagyu|cerdo|pollo_empanada))$/;
+  for (let w = 0; w < 6; w++, monday = addDays(monday, 7)) {
+    const week = generateWeek(d, monday);
+    d.plan[monday] = week;
+    const mains = week.filter((m) => m.slot === 'comida' || m.slot === 'cena').map((m) => RECIPE_LIBRARY.find((r) => r.id === m.recipeId)!);
+    weeks.push({
+      fish: mains.filter((r) => ['pescado_blanco', 'pescado_azul', 'atun', 'marisco'].includes(r.main)).length,
+      legumes: mains.filter((r) => r.main === 'legumbre').length,
+      red: mains.filter((r) => ['ternera', 'cerdo'].includes(r.main)).length,
+      processed: mains.filter((r) => r.ingredients.some((i) => PROC.test(i.foodId) && i.amount >= 30)).length,
+    });
+  }
+  console.log(`\nDieta mediterránea: ${lunches.length} recetas de mediodía, sin verdura ${noVeg.length}, sin hidratos ${noStarch.length} · por semana (pescado/legumbre/carne roja/procesado): ${weeks.map((w) => `${w.fish}/${w.legumes}/${w.red}/${w.processed}`).join('  ')}`);
+  if (noVeg.length) problems.push(`Comidas de mediodía sin verdura: ${noVeg.slice(0, 8).join(', ')}`);
+  if (noStarch.length) problems.push(`Comidas de mediodía sin pan, cereal, patata ni legumbre: ${noStarch.slice(0, 8).join(', ')}`);
+  if (weeks.some((w) => w.processed > 1)) problems.push('Más de una comida con carne procesada en una semana');
+  if (weeks.some((w) => w.fish < 2 || w.legumes < 2)) problems.push('Alguna semana con menos de 2 pescados o 2 legumbres');
+  if (weeks.some((w) => w.red > 3)) problems.push('Alguna semana con más de 3 comidas de carne roja');
+}
+
+// ---------------------------------------------------------------------------
+// Equivalencias con sentido: primero la misma familia y nada fuera de lugar en esa comida
+{
+  const d = createUserData(baseProfile({ name: 'Equivalencias' }));
+  const top = (id: string, amt: number, slot: 'desayuno' | 'comida' | 'cena') => equivalencesFor(d, id, amt, { slot })?.items.slice(0, 6) ?? [];
+  const pan = top('pan', 60, 'desayuno');
+  const grainsAtBreakfast = equivalencesFor(d, 'pan', 60, { slot: 'desayuno' })!.items.filter((e) => ['granos', 'tuberculos'].includes(familyOf(e.food.id)?.id ?? ''));
+  console.log(`\nEquivalencias: pan (desayuno) → ${pan.map((e) => e.food.name).join(', ')} · merluza → ${top('merluza', 150, 'cena').slice(0, 3).map((e) => e.food.name).join(', ')} · leche → ${top('leche', 200, 'desayuno').slice(0, 3).map((e) => e.food.name).join(', ')}`);
+  if (pan[0]?.food.id !== 'pan_integral' || !pan.every((e) => familyOf(e.food.id)?.id === 'panes')) problems.push('Las equivalencias del pan no empiezan por otros panes');
+  if (grainsAtBreakfast.length) problems.push(`En el desayuno se propone cambiar el pan por ${grainsAtBreakfast.map((e) => e.food.name).join(', ')}`);
+  if (!top('merluza', 150, 'cena').slice(0, 3).every((e) => familyOf(e.food.id)?.id === 'pescado_blanco')) problems.push('La merluza no se cambia primero por otro pescado blanco');
+  const covered = new Set(RECIPE_LIBRARY.flatMap((r) => r.ingredients.map((i) => i.foodId)).filter((id) => familyOf(id)));
+  const used = new Set(RECIPE_LIBRARY.flatMap((r) => r.ingredients.filter((i) => i.amount >= 40).map((i) => i.foodId)));
+  const without = [...used].filter((id) => !covered.has(id));
+  console.log(`  Ingredientes principales con equivalencias: ${used.size - without.length} de ${used.size}${without.length ? ` (sin familia: ${without.slice(0, 12).join(', ')}…)` : ''}`);
 }
 
 if (RECIPE_LIBRARY.length < 500) problems.push(`Solo hay ${RECIPE_LIBRARY.length} recetas (mínimo 500)`);

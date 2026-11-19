@@ -108,7 +108,7 @@ export function reviewMenu(data: AppData, draft: UserProfile, today: ISODate): M
         for (const b of bad) {
           const row = ings.find((i) => i.foodId === b.foodId && !i.removed)!;
           const key = row.replaces ?? row.foodId;
-          const eq = equivalencesFor(d, row.foodId, row.amount, { exclude: used });
+          const eq = equivalencesFor(d, row.foodId, row.amount, { exclude: used, slot: meal.slot });
           const pick = eq?.items.find((e) => !e.blocked);
           if (!pick) {
             ok = false;

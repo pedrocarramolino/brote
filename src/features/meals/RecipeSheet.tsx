@@ -232,7 +232,7 @@ export function RecipeSheet({ recipe, open, onClose, meal, onSwap, onAddToPlan, 
           // equivalencias del alimento actual; sin repetir alimentos que ya están en el plato
           const exclude = new Set(inMeal);
           if (ing.replaces) exclude.add(ing.replaces);
-          const eq = f ? equivalencesFor(data, f.id, ing.amount, { exclude }) : null;
+          const eq = f ? equivalencesFor(data, f.id, ing.amount, { exclude, slot: meal?.slot ?? recipe.slots[0] }) : null;
           const canExpand = editable || !!eq?.items.length;
           const expanded = openIng === key;
           const origAmount = recipe.ingredients.find((i) => i.foodId === key)?.amount ?? ing.amount;

@@ -2,6 +2,7 @@ import type { Recipe, RecipeTag } from '../../types';
 import { BASE_FOODS } from '../foods';
 import { LEGACY_RECIPES } from '../recipes';
 import { finalize } from './build';
+import { mediterraneanMeal } from './mediterranean';
 import { DESAYUNOS } from './desayunos';
 import { COMIDAS } from './comidas';
 import { CENAS } from './cenas';
@@ -49,6 +50,7 @@ export const RECIPE_LIBRARY: Recipe[] = [
   ...GNOCCHI_COMIDA, ...GNOCCHI_CENA, ...DESAYUNOS_V5, ...MEDIA_MANANA_V5, ...COMIDAS_V5, ...MERIENDAS_V5, ...CENAS_V5, ...SNACKS_V5, ...POSTRES_V5, ...SNACKS_V4, ...POSTRES_V4,
 ]
   .map(finalize)
+  .map(mediterraneanMeal)
   .map((r) => ({ ...r, tags: autoTags(r) }));
 
 // Comprobaciones de integridad al cargar (fallan en desarrollo si hay datos incoherentes)

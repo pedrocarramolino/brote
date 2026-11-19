@@ -13,6 +13,8 @@ interface SheetProps {
   /** acción en la cabecera, a la derecha del título */
   headerAction?: ReactNode;
   size?: 'md' | 'lg';
+  /** altura fija (no crece ni encoge con el contenido): para buscadores, así nada salta al escribir */
+  fill?: boolean;
 }
 
 let openCount = 0;
@@ -21,7 +23,7 @@ let openCount = 0;
  * Hoja modal: en móvil sube desde abajo con asa y se cierra deslizando hacia abajo;
  * en tableta y escritorio se presenta centrada. Escape, fondo y botón cierran.
  */
-export function Sheet({ open, onClose, title, subtitle, children, footer, headerAction, size = 'md' }: SheetProps) {
+export function Sheet({ open, onClose, title, subtitle, children, footer, headerAction, size = 'md', fill = false }: SheetProps) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   const lastFocus = useRef<HTMLElement | null>(null);
@@ -98,6 +100,7 @@ export function Sheet({ open, onClose, title, subtitle, children, footer, header
         className={cx(
           'anim-sheet md:anim-pop-in relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[22px] bg-surface shadow-float focus:outline-none md:max-h-[86vh] md:rounded-[22px]',
           size === 'lg' ? 'md:max-w-2xl' : 'md:max-w-lg',
+          fill && 'h-[92dvh] md:h-[86vh]',
         )}
         style={drag ? { transform: `translateY(${drag}px)`, transition: 'none' } : undefined}
       >

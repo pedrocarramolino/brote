@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ChevronLeft, Clock, PencilLine, Search, ShieldCheck, Shuffle } from 'lucide-react';
-import type { PlannedMeal } from '../../types';
+import { ChevronLeft, ChefHat, Clock, Search, ShieldCheck, Shuffle } from 'lucide-react';
+import type { MealSlot, PlannedMeal, UserDishData } from '../../types';
 import { Sheet } from '../../components/ui/Sheet';
-import { Badge, Button, Chip, Segmented, TextField, cx } from '../../components/ui/primitives';
+import { Badge, Button, Chip, Segmented, cx } from '../../components/ui/primitives';
 import { useData } from '../../store/AppStore';
 import { findAlternatives, type Alternative } from '../../services/substitutions';
 import { getFood, SLOT_META } from '../../services/catalog';
@@ -14,6 +14,10 @@ import { userDishes } from '../../services/dishes';
 import { recipeFit } from '../../services/nutrition';
 import { FreeMealCover, MacroInline, RecipeCover } from './RecipeBits';
 import { useMealActions } from './useMealActions';
+import { DishEditor } from '../dishes/DishEditor';
+
+/** Categoría inicial del plato nuevo según la comida que se cambia. */
+const CATEGORY_OF_SLOT: Record<MealSlot, UserDishData['category']> = { desayuno: 'desayuno', mediamanana: 'snack', comida: 'comida', merienda: 'merienda', cena: 'cena' };
 
 function Delta({ v, unit, invert = false }: { v: number; unit: string; invert?: boolean }) {
   const r = Math.round(v);
@@ -29,9 +33,8 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
   const data = useData();
   const { swap, setFree } = useMealActions();
   const [selected, setSelected] = useState<Alternative | null>(null);
-  const [freeMode, setFreeMode] = useState(false);
-  const [freeName, setFreeName] = useState('');
-  const [freeError, setFreeError] = useState<string | null>(null);
+  // creador de platos abierto desde aquí: al guardar, el plato nuevo pasa a esta comida
+  const [creating, setCreating] = useState(false);
   const [q, setQ] = useState('');
   const [scope, setScope] = useState<'slot' | 'all' | 'mine'>('slot');
   const [maxMin, setMaxMin] = useState<0 | 15 | 30>(0);
@@ -41,9 +44,7 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
   useEffect(() => {
     if (open) {
       setSelected(null);
-      setFreeMode(false);
-      setFreeName('');
-      setFreeError(null);
+      setCreating(false);
       setQ('');
       setScope('slot');
       setMaxMin(0);
@@ -55,11 +56,12 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
   const result = useMemo(() => {
     if (!meal) return null;
     const res = findAlternatives(data, meal, scope === 'mine' ? 0 : 1000, { anySlot: scope === 'all' });
-    if (scope !== 'mine') return res;
-    // Mis platos: todos los del usuario (avisando si alguno no encaja con el perfil)
+    // Mis platos: todos los del usuario (avisando si alguno no encaja con el perfil). En «Comida»
+    // y «Todas» también aparecen, para que un plato creado se encuentre al buscarlo.
     const om = res.original.macros;
-    const alternatives = userDishes(data)
-      .filter((r) => r.id !== meal.recipeId)
+    const seen = new Set(res.alternatives.map((a) => a.recipe.id));
+    const mine = userDishes(data)
+      .filter((r) => r.id !== meal.recipeId && !seen.has(r.id) && (scope !== 'slot' || r.slots.includes(meal.slot)))
       .map((r) => {
         const macros = recipeNutrition(data, r, meal.portion).macros;
         const fit = recipeFit(data, r, data.profile);
@@ -71,15 +73,18 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
           delta: om ? { kcal: macros.kcal - om.kcal, protein: macros.protein - om.protein, carbs: macros.carbs - om.carbs, fat: macros.fat - om.fat } : null,
         };
       });
-    return { ...res, alternatives, excludedCount: 0 };
+    if (scope !== 'mine') return { ...res, alternatives: [...res.alternatives, ...mine] };
+    return { ...res, alternatives: mine, excludedCount: 0 };
   }, [data, meal, scope]);
   const filtered = useMemo(() => {
     if (!result) return [];
     const nq = normalize(q.trim());
-    return result.alternatives.filter((a) => {
+    const list = result.alternatives.filter((a) => {
       if (maxMin && a.recipe.minutes > maxMin) return false;
       return recipeMatches(data, a.recipe, nq, normalize);
     });
+    // al buscar, primero los platos propios
+    return nq ? [...list.filter((a) => a.recipe.custom), ...list.filter((a) => !a.recipe.custom)] : list;
   }, [result, q, maxMin, data]);
   if (!meal || !result) return null;
   const { original, excludedCount } = result;
@@ -101,32 +106,24 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
   };
 
   const confirm = () => {
-    if (freeMode) {
-      const name = freeName.trim();
-      if (name.length < 2) {
-        setFreeError('Escribe el nombre del plato (mínimo 2 caracteres).');
-        return;
-      }
-      swap(meal, { customName: name });
-    } else if (selected) {
-      swap(meal, { recipeId: selected.recipe.id }, selected.reasons.includes('Sorpréndeme') ? 'sorpresa' : 'manual');
-    }
+    if (selected) swap(meal, { recipeId: selected.recipe.id }, selected.reasons.includes('Sorpréndeme') ? 'sorpresa' : 'manual');
     onClose();
   };
 
-  const title = selected ? 'Revisar cambio' : freeMode ? 'Plato libre' : 'Cambiar plato';
+  const title = selected ? 'Revisar cambio' : 'Cambiar plato';
 
   return (
+    <>
     <Sheet
-      open={open}
+      open={open && !creating}
       onClose={onClose}
       title={title}
       size="lg"
       subtitle={`${SLOT_META[meal.slot].label} · sustituye a ${original.recipe ? recipeTitle(original.recipe) : meal.customName ?? 'plato sin receta'}`}
       footer={
-        selected || freeMode ? (
+        selected ? (
           <div className="flex gap-2">
-            <Button variant="secondary" icon={<ChevronLeft size={18} />} onClick={() => { setSelected(null); setFreeMode(false); }}>
+            <Button variant="secondary" icon={<ChevronLeft size={18} />} onClick={() => setSelected(null)}>
               Volver
             </Button>
             {selected?.reasons.includes('Sorpréndeme') && (
@@ -139,7 +136,7 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
         ) : undefined
       }
     >
-      {!selected && !freeMode && (
+      {!selected && (
         <>
           <button
             type="button"
@@ -153,6 +150,18 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
               <span className="block text-[13px] leading-snug text-ink2">
                 {meal.free ? 'Recupera el plato que tenías previsto.' : 'Sáltate este plato y come lo que te apetezca. No suma calorías previstas ni entra en la compra.'}
               </span>
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="press mb-3 flex w-full items-center gap-3 rounded-[16px] bg-accentSoft/60 p-3 text-left"
+            data-swap-create-dish
+          >
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] bg-surface text-accent"><ChefHat size={22} /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[16px] font-semibold">Crear mi plato</span>
+              <span className="block text-[13px] leading-snug text-ink2">Elige ingredientes y cantidades: verás sus calorías y macros, y se pondrá en esta comida.</span>
             </span>
           </button>
           <div className="mb-4 flex items-start gap-2 rounded-[14px] bg-accentSoft/70 px-3.5 py-2.5 text-[13px] leading-snug text-accent-deep">
@@ -190,7 +199,7 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
 
           {alternatives.length === 0 ? (
             <p className="py-8 text-center text-[15px] text-ink2">
-              {scope === 'mine' ? 'Aún no tienes platos propios. Créalos en Recetas › Crear mi plato.' : 'No hay recetas compatibles con estos filtros. Prueba con «Todas» o añade un plato libre.'}
+              {scope === 'mine' ? 'Aún no tienes platos propios. Usa «Crear mi plato» arriba.' : 'No hay recetas con estos filtros. Prueba con «Todas» o crea tu plato.'}
             </p>
           ) : (
             <ul className="space-y-2">
@@ -233,17 +242,6 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
             </Button>
           )}
 
-          <button
-            type="button"
-            onClick={() => setFreeMode(true)}
-            className="press mt-3 flex w-full items-center gap-3 rounded-[16px] border border-dashed border-line p-3 text-left hover:bg-surface2/60"
-          >
-            <span className="flex h-14 w-14 items-center justify-center rounded-[14px] bg-surface2 text-ink2"><PencilLine size={22} /></span>
-            <span>
-              <span className="block text-[16px] font-semibold">Otro plato</span>
-              <span className="block text-[13px] text-ink2">Escribe lo que vas a comer. No tendrá valores nutricionales verificados.</span>
-            </span>
-          </button>
         </>
       )}
 
@@ -301,24 +299,17 @@ export function SwapSheet({ meal, open, onClose }: { meal: PlannedMeal | null; o
         </div>
       )}
 
-      {freeMode && (
-        <div className="anim-fade">
-          <TextField
-            label="¿Qué vas a comer?"
-            placeholder="Por ejemplo: menú del día en el trabajo"
-            value={freeName}
-            onChange={(e) => { setFreeName(e.target.value); setFreeError(null); }}
-            error={freeError}
-            maxLength={80}
-            data-autofocus
-            onKeyDown={(e) => e.key === 'Enter' && confirm()}
-          />
-          <div className="mt-4 flex items-start gap-2 rounded-[14px] bg-warnSoft px-3.5 py-2.5 text-[13px] leading-snug text-warn">
-            <AlertTriangle size={18} className="mt-[1px] shrink-0" />
-            Este plato no tiene valores nutricionales verificados: no se sumará a tus totales ni a la lista de la compra. Si quieres contabilizarlo, registra sus alimentos desde «Añadir alimento».
-          </div>
-        </div>
-      )}
     </Sheet>
+    <DishEditor
+      open={creating}
+      initialName={q.trim() || undefined}
+      initialCategory={CATEGORY_OF_SLOT[meal.slot]}
+      onClose={() => setCreating(false)}
+      onSaved={(id) => {
+        swap(meal, { recipeId: id }, 'manual');
+        onClose();
+      }}
+    />
+    </>
   );
 }
