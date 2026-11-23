@@ -13,7 +13,8 @@
     "check:library": "esbuild scripts/check-library.ts --bundle --platform=node --log-level=warning --outfile=node_modules/.cache/check-library.cjs && node node_modules/.cache/check-library.cjs",
     "check:dishes": "esbuild scripts/check-dishes.ts --bundle --platform=node --log-level=warning --outfile=node_modules/.cache/check-dishes.cjs && node node_modules/.cache/check-dishes.cjs",
     "check:foods": "esbuild scripts/check-foods.ts --bundle --platform=node --format=esm --log-level=warning --outfile=node_modules/.cache/check-foods.mjs && node node_modules/.cache/check-foods.mjs",
-    "check:burn": "esbuild scripts/check-burn.ts --bundle --platform=node --log-level=warning --outfile=node_modules/.cache/check-burn.cjs && node node_modules/.cache/check-burn.cjs"
+    "check:burn": "esbuild scripts/check-burn.ts --bundle --platform=node --log-level=warning --outfile=node_modules/.cache/check-burn.cjs && node node_modules/.cache/check-burn.cjs",
+    "check:snack": "esbuild scripts/check-snack.ts --bundle --platform=node --log-level=warning --outfile=node_modules/.cache/check-snack.cjs && node node_modules/.cache/check-snack.cjs"
   },
   "dependencies": {
     "lucide-react": "0.460.0",

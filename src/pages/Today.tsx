@@ -53,6 +53,7 @@ export function TodayPage({ dateParam }: { dateParam: string | null }) {
   const [recipeMeal, setRecipeMeal] = useState<PlannedMeal | null>(null);
   const [swapMeal, setSwapMeal] = useState<PlannedMeal | null>(null);
   const [logSlot, setLogSlot] = useState<MealSlot | null>(null);
+  const [snackOpen, setSnackOpen] = useState(false);
   const [editLog, setEditLog] = useState<FoodLogEntry | null>(null);
   const [creatingDish, setCreatingDish] = useState<MealSlot | null>(null);
   const [dishToLog, setDishToLog] = useState<{ id: string; slot: MealSlot } | null>(null);
@@ -134,6 +135,7 @@ export function TodayPage({ dateParam }: { dateParam: string | null }) {
             onOpenRecipe={setRecipeMeal}
             onSwap={setSwapMeal}
             onAddFood={(s) => setLogSlot(s)}
+            onAddSnack={() => setSnackOpen(true)}
             onEditLog={(e) => setEditLog(e)}
           />
         </div>
@@ -240,9 +242,11 @@ export function TodayPage({ dateParam }: { dateParam: string | null }) {
       <WeeklyReviewSheet open={reviewOpen} onClose={() => setReviewOpen(false)} today={today} />
       <SwapSheet meal={liveSwapMeal} open={!!liveSwapMeal} onClose={() => setSwapMeal(null)} />
       <LogFoodSheet
-        open={!!logSlot || !!editLog || !!dishRecipe}
+        open={!!logSlot || !!editLog || !!dishRecipe || snackOpen}
+        snack={snackOpen}
         onClose={() => {
           setLogSlot(null);
+          setSnackOpen(false);
           setEditLog(null);
           setDishToLog(null);
         }}

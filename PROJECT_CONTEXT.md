@@ -100,6 +100,12 @@ Cualquier alimento consumido se edita sin borrarlo y volver a añadirlo, en unid
 - **Buscadores sin saltos**: `Sheet` con `fill` (altura fija) en el buscador de Hoy y en el de ingredientes del creador; el campo de búsqueda del creador recibe el foco al abrirse.
 - **Creador de platos**: cada ingrediente muestra su cantidad («1 ud. (70 g) · 24 kcal…»); campo de cantidad más ancho, unidad a todo el ancho y «Sustituir» junto a «Quitar». Sin ración en la base, la cantidad inicial depende del tipo (aceite 10 g, salsas y dulces 15 g, frutos secos 25 g, quesos 30 g; si no, 100 g).
 
+## Picoteo (fuera de las comidas)
+
+- **Modelo**: `FoodLogEntry.snack = true` marca lo comido fuera de las comidas del día; `slot` guarda la comida más cercana por hora para no tocar el modelo. `FoodLogEntry.quick = true` es un registro «solo calorías» introducido a mano (sin alimento): nombre y valores en `snapshot` con `amount = 1`, así `logEntryMacros` y `dayTotals` lo suman sin código aparte. `dayTotals` ya sumaba todos los registros del día, así que el picoteo cuenta en la rueda de calorías ingeridas y en los macros.
+- **Interfaz** (Hoy): tarjeta «Picoteo» al final de la línea temporal (`SnackCard` en `MealTimeline`) con sus registros, su total en kcal y «Añadir picoteo». Abre `LogFoodSheet` en modo `snack` (título «Añadir picoteo»): el mismo buscador de alimentos, Mis platos, favoritos y cantidades en unidades o gramos, más «Calorías a mano» (nombre, kcal obligatorias y proteínas, hidratos y grasas opcionales). El selector «Comida» incluye «Picoteo (fuera de las comidas)», así un registro se puede pasar de una comida al picoteo y al revés. Los picoteos no aparecen dentro de las comidas.
+- **Pruebas**: `npm run check:snack` (suma al día con sus macros, a mano tal cual, no se mezcla con las comidas, solo en su día, JSON, moverlo no cambia el total).
+
 ## Hojas modales y foco (corrección)
 
 `components/ui/Sheet.tsx` guarda `onClose` en una referencia y su efecto de foco depende solo de `open`. Antes dependía también de `onClose`: las páginas pasan funciones nuevas en cada render, así que cada pulsación volvía a ejecutar el efecto, que movía el foco al panel. El campo perdía el foco y el teclado del iPhone se cerraba tras cada número. Afectaba a todas las hojas con campos de texto. Para evitar que vuelva a pasar, cualquier efecto de una hoja que mueva el foco debe depender solo de `open`.
@@ -125,11 +131,12 @@ Cualquier alimento consumido se edita sin borrarlo y volver a añadirlo, en unid
 - `npm run check:dishes`: 18 comprobaciones de Mis platos (un ingrediente, cinco, cambio de cantidad, borrar ingrediente, raciones, unidades, guardar, persistencia JSON, menú semanal y compra, registrar 1 y ½ ración, suma del día, borrar consumo, editar, historial intacto, duplicar, borrar plato, datos incompletos).
 - `npm run check:foods`: gnocchi (búsqueda con cualquier grafía, valor y historial), cantidad y variedad por grupo, ids y nombres únicos, equivalentes agrupados, ningún alimento con marca, variedades conservadas, todas las recetas encuentran sus alimentos, buscador («leche», «queso», «mozarela», «yogurt griego», buscar una marca no da marcas), migración de marcas a genérico (platos, registros, favoritos, lo comido no cambia, sin equivalente se conserva), cantidades (kiwi 1/2/½, huevos, medio plátano, g y ml, sin equivalencias inventadas, cambio unidad ⇄ gramos, valores no válidos), comida del plan con cantidad cambiada (recalcula, total del día, receta original intacta) y registro 2 → 1 kiwi.
 - `npm run check:burn`: objetivo y registro de calorías quemadas.
+- `npm run check:snack`: picoteo y calorías a mano.
 - `npm run typecheck` y `npm run build`.
 
 ## Pendiente
 
-- Cuentas y sincronización con Supabase (migraciones 0001–0007 preparadas).
+- Cuentas y sincronización con Supabase (migraciones 0001–0008 preparadas).
 - Fotos reales para la biblioteca (ahora portadas ilustradas, marcadas como tales).
 - Si Brote pasa a ser comercial: solicitar autorización a AESAN para BEDCA (o sustituirla por USDA).
 - Equivalentes oficiales para los 13 alimentos que conservan un valor estimado.

@@ -234,11 +234,12 @@ export function useMealActions() {
   );
 
   const updateLog = useCallback(
-    (id: string, patch: Partial<Pick<FoodLogEntry, 'amount' | 'slot' | 'date' | 'quantity' | 'unit'>>) => {
+    (id: string, patch: Partial<Pick<FoodLogEntry, 'amount' | 'slot' | 'date' | 'quantity' | 'unit' | 'snack' | 'snapshot'>>) => {
       mutate((d) => {
         const l = d.log.find((x) => x.id === id);
         if (!l) return;
         Object.assign(l, patch);
+        if (patch.snack === false) delete l.snack;
         // cantidad en g/ml: la unidad mostrada se quita si no se indica
         if ('amount' in patch && !('unit' in patch)) { delete l.quantity; delete l.unit; }
         if (patch.unit === undefined && 'unit' in patch) { delete l.quantity; delete l.unit; }

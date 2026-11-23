@@ -1,5 +1,5 @@
 import { qtyLabel } from '../meals/QuantityEditor';
-import { ArrowLeftRight, Ban, Check, Minus, Plus, PartyPopper, RotateCcw } from 'lucide-react';
+import { ArrowLeftRight, Ban, Check, Cookie, Minus, Plus, PartyPopper, RotateCcw } from 'lucide-react';
 import type { FoodLogEntry, ISODate, MealSlot, PlannedMeal } from '../../types';
 import { useData } from '../../store/AppStore';
 import { getFood, getRecipe, SLOT_META, slotsOrdered } from '../../services/catalog';
@@ -21,6 +21,8 @@ interface Props {
   onSwap: (m: PlannedMeal) => void;
   onAddFood: (slot: MealSlot) => void;
   onEditLog: (e: FoodLogEntry) => void;
+  /** añadir un picoteo (algo comido fuera de las comidas) */
+  onAddSnack?: () => void;
 }
 
 export function StatusNode({ meal, onToggle, size = 30 }: { meal: PlannedMeal; onToggle: () => void; size?: number }) {
@@ -49,7 +51,7 @@ export function StatusNode({ meal, onToggle, size = 30 }: { meal: PlannedMeal; o
   );
 }
 
-export function MealTimeline({ date, meals, onOpenRecipe, onSwap, onAddFood, onEditLog }: Props) {
+export function MealTimeline({ date, meals, onOpenRecipe, onSwap, onAddFood, onEditLog, onAddSnack }: Props) {
   const data = useData();
   const { toggleDone, setStatus, setFree } = useMealActions();
   const slots = slotsOrdered(data.profile.mealSlots);
@@ -58,11 +60,11 @@ export function MealTimeline({ date, meals, onOpenRecipe, onSwap, onAddFood, onE
     <ol className="relative">
       {slots.map((slot, i) => {
         const meal = meals.find((m) => m.slot === slot);
-        const logs = data.log.filter((l) => l.date === date && l.slot === slot);
+        const logs = data.log.filter((l) => l.date === date && l.slot === slot && !l.snack);
         const recipe = meal ? getRecipe(data, meal.recipeId) : undefined;
         const n = meal ? plannedMealNutrition(data, meal).macros : null;
         const time = data.profile.schedule[slot] ?? SLOT_META[slot].time;
-        const last = i === slots.length - 1;
+        const last = i === slots.length - 1 && !onAddSnack;
         return (
           <li key={slot} className="relative flex gap-2.5 pb-4 sm:gap-4">
             {/* Columna de hora y línea temporal */}
@@ -137,7 +139,7 @@ export function MealTimeline({ date, meals, onOpenRecipe, onSwap, onAddFood, onE
                           <button type="button" onClick={() => onEditLog(l)} className="flex min-h-[40px] w-full items-center justify-between gap-3 rounded-[8px] text-left text-[14px] hover:bg-surface2/60" data-log-entry={l.recipeId ? 'plato' : 'alimento'}>
                             <span className="min-w-0 truncate">
                               <span className="font-medium">{l.snapshot ? l.snapshot.name : f?.name ?? 'Alimento eliminado'}</span>
-                              <span className="tabular text-ink3"> · {l.snapshot ? servingsLabel(l.amount) : l.unit && l.quantity ? `${qtyLabel(l.quantity, l.unit)} · ${n0(l.amount)} ${f?.unit ?? ''}` : `${n0(l.amount)} ${f?.unit ?? ''}`}</span>
+                              <span className="tabular text-ink3"> · {l.quick ? 'a mano' : l.snapshot ? servingsLabel(l.amount) : l.unit && l.quantity ? `${qtyLabel(l.quantity, l.unit)} · ${n0(l.amount)} ${f?.unit ?? ''}` : `${n0(l.amount)} ${f?.unit ?? ''}`}</span>
                             </span>
                             <span className="tabular shrink-0 text-ink2">{m ? `${n0(m.kcal)} kcal` : '—'}</span>
                           </button>
@@ -162,6 +164,59 @@ export function MealTimeline({ date, meals, onOpenRecipe, onSwap, onAddFood, onE
           </li>
         );
       })}
+      {onAddSnack && <SnackCard date={date} onAdd={onAddSnack} onEditLog={onEditLog} />}
     </ol>
+  );
+}
+
+/**
+ * Picoteo: lo que se come fuera de las comidas del día. Suma al total del día igual que
+ * cualquier registro; aquí se ve aparte, con su total.
+ */
+function SnackCard({ date, onAdd, onEditLog }: { date: ISODate; onAdd: () => void; onEditLog: (e: FoodLogEntry) => void }) {
+  const data = useData();
+  const logs = data.log.filter((l) => l.date === date && l.snack).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const total = logs.reduce((a, l) => a + (logEntryMacros(data, l)?.kcal ?? 0), 0);
+  return (
+    <li className="relative flex gap-2.5 pb-4 sm:gap-4" data-snack-card>
+      <div className="flex w-[44px] shrink-0 flex-col items-center pt-3.5 sm:w-[60px]">
+        <span className="text-[12px] font-semibold text-ink3">Extra</span>
+        <span className="mt-2.5 flex h-[30px] w-[30px] items-center justify-center rounded-full bg-surface2 text-ink2"><Cookie size={16} aria-hidden="true" /></span>
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="rounded-xl2 bg-surface shadow-card ring-1 ring-line/60">
+          <div className="flex items-center justify-between px-4 pb-0 pt-3">
+            <h3 className="text-[13px] font-semibold uppercase tracking-wide text-ink3">Picoteo</h3>
+            {logs.length > 0 && <span className="tabular text-[13px] font-semibold text-ink2" data-snack-total>{n0(total)} kcal</span>}
+          </div>
+          {logs.length ? (
+            <ul className="mx-4 py-1.5">
+              {logs.map((l) => {
+                const f = l.snapshot ? undefined : getFood(data, l.foodId);
+                const m = logEntryMacros(data, l);
+                return (
+                  <li key={l.id}>
+                    <button type="button" onClick={() => onEditLog(l)} className="flex min-h-[40px] w-full items-center justify-between gap-3 rounded-[8px] text-left text-[14px] hover:bg-surface2/60" data-snack-entry>
+                      <span className="min-w-0 truncate">
+                        <span className="font-medium">{l.snapshot ? l.snapshot.name : f?.name ?? 'Alimento eliminado'}</span>
+                        <span className="tabular text-ink3"> · {l.quick ? 'a mano' : l.snapshot ? servingsLabel(l.amount) : l.unit && l.quantity ? `${qtyLabel(l.quantity, l.unit)} · ${n0(l.amount)} ${f?.unit ?? ''}` : `${n0(l.amount)} ${f?.unit ?? ''}`}</span>
+                      </span>
+                      <span className="tabular shrink-0 text-ink2">{m ? `${n0(m.kcal)} kcal` : '—'}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="px-4 pb-2 pt-1 text-[14px] text-ink2">¿Has comido algo fuera de las comidas? Anótalo aquí con sus calorías.</p>
+          )}
+          <div className="flex gap-1 border-t border-line/60 px-2 py-1">
+            <button type="button" onClick={onAdd} className="press inline-flex h-10 items-center gap-1.5 whitespace-nowrap rounded-full px-3 text-[14px] font-semibold text-accent hover:bg-accentSoft/60" data-add-snack>
+              <Plus size={16} /> Añadir picoteo
+            </button>
+          </div>
+        </div>
+      </div>
+    </li>
   );
 }

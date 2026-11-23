@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Camera, ChevronLeft, ChevronRight, Heart, Plus, Search, Trash2 } from 'lucide-react';
+import { Camera, ChevronLeft, ChevronRight, Heart, PencilLine, Plus, Search, Trash2 } from 'lucide-react';
 import type { Food, FoodLogEntry, ISODate, MealSlot, Recipe } from '../../types';
 import { Sheet } from '../../components/ui/Sheet';
 import { Badge, Button, IconButton, Segmented, SelectField, TextField, cx } from '../../components/ui/primitives';
@@ -29,16 +29,24 @@ interface Props {
   initialDish?: Recipe | null;
   /** abrir el creador de platos */
   onCreateDish?: () => void;
+  /** registrar como picoteo (fuera de las comidas del día) */
+  snack?: boolean;
 }
 
 type Tab = 'buscar' | 'favoritos' | 'recientes' | 'platos';
+/** valor del selector de comida para «Picoteo» */
+const SNACK = '__picoteo';
 
-export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry, onOpenPhoto, initialDish, onCreateDish }: Props) {
+export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry, onOpenPhoto, initialDish, onCreateDish, snack = false }: Props) {
   const data = useData();
   const { mutate } = useStore();
   const { addLog, updateLog, removeLog } = useMealActions();
 
-  const [view, setView] = useState<'list' | 'amount' | 'custom' | 'dish'>('list');
+  const [view, setView] = useState<'list' | 'amount' | 'custom' | 'dish' | 'quick'>('list');
+  // picoteo: fuera de las comidas; se puede pasar a una comida y al revés
+  const [asSnack, setAsSnack] = useState(snack);
+  const [quick, setQuick] = useState({ name: '', kcal: '', protein: '', carbs: '', fat: '' });
+  const [quickError, setQuickError] = useState<string | null>(null);
   const [dish, setDish] = useState<Recipe | null>(null);
   const [servingsText, setServingsText] = useState('1');
   const [tab, setTab] = useState<Tab>('buscar');
@@ -54,7 +62,15 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
     setQuery('');
     setTab('buscar');
     setDish(null);
-    if (editEntry?.snapshot) {
+    setAsSnack(editEntry ? !!editEntry.snack : snack);
+    setQuickError(null);
+    if (editEntry?.quick && editEntry.snapshot) {
+      const sp = editEntry.snapshot.perServing;
+      const t = (v: number) => (v ? String(Math.round(v * 10) / 10).replace('.', ',') : '');
+      setQuick({ name: editEntry.snapshot.name, kcal: String(Math.round(sp.kcal)), protein: t(sp.protein), carbs: t(sp.carbs), fat: t(sp.fat) });
+      setSlot(editEntry.slot);
+      setView('quick');
+    } else if (editEntry?.snapshot) {
       setServingsText(String(editEntry.amount).replace('.', ','));
       setSlot(editEntry.slot);
       setView('dish');
@@ -70,6 +86,7 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
       setView('amount');
     } else {
       setFood(null);
+      setQuick({ name: '', kcal: '', protein: '', carbs: '', fat: '' });
       setView('list');
     }
     setAmountError(null);
@@ -120,8 +137,8 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
 
   const saveDish = () => {
     if (!validServings) return;
-    if (editEntry) updateLog(editEntry.id, { amount: servings, slot });
-    else if (dish) addLog(dishLogEntry(data, dish, { date, slot, servings }));
+    if (editEntry) updateLog(editEntry.id, { amount: servings, slot, snack: asSnack });
+    else if (dish) addLog({ ...dishLogEntry(data, dish, { date, slot, servings }), ...(asSnack ? { snack: true } : {}) });
     onClose();
   };
 
@@ -131,8 +148,27 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
       setAmountError('Introduce una cantidad válida.');
       return;
     }
-    if (editEntry) updateLog(editEntry.id, { amount, slot, ...shown });
-    else addLog({ date, slot, foodId: food.id, amount, method: 'manual', ...(shown.unit ? shown : {}) });
+    if (editEntry) updateLog(editEntry.id, { amount, slot, ...shown, snack: asSnack });
+    else addLog({ date, slot, foodId: food.id, amount, method: 'manual', ...(shown.unit ? shown : {}), ...(asSnack ? { snack: true } : {}) });
+    onClose();
+  };
+
+  /** «Solo calorías»: lo introduce el usuario (p. ej. de una etiqueta o de una carta); no se inventa nada. */
+  const saveQuick = () => {
+    const kcal = parseDecimal(quick.kcal);
+    if (!Number.isFinite(kcal) || kcal <= 0 || kcal > 5000) {
+      setQuickError('Introduce las calorías (entre 1 y 5.000 kcal).');
+      return;
+    }
+    const opt = (t: string) => { const v = parseDecimal(t); return Number.isFinite(v) && v >= 0 && v <= 500 ? v : 0; };
+    const snapshot = {
+      name: quick.name.trim().slice(0, 60) || (asSnack ? 'Picoteo' : 'Calorías a mano'),
+      perServing: { kcal: Math.round(kcal), protein: opt(quick.protein), carbs: opt(quick.carbs), fat: opt(quick.fat) },
+      complete: !!(quick.protein.trim() && quick.carbs.trim() && quick.fat.trim()),
+      at: new Date().toISOString(),
+    };
+    if (editEntry) updateLog(editEntry.id, { snapshot, slot, snack: asSnack });
+    else addLog({ date, slot, foodId: '', amount: 1, method: 'manual', quick: true, snapshot, ...(asSnack ? { snack: true } : {}) });
     onClose();
   };
 
@@ -151,8 +187,8 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
       open={open}
       onClose={onClose}
       fill={view === 'list'}
-      title={editEntry ? 'Editar registro' : view === 'custom' ? 'Alimento personalizado' : view === 'dish' ? 'Registrar mi plato' : 'Añadir alimento'}
-      subtitle={`${relativeDayLabel(date)} · ${SLOT_META[slot].label}`}
+      title={editEntry ? 'Editar registro' : view === 'custom' ? 'Alimento personalizado' : view === 'quick' ? 'Calorías a mano' : view === 'dish' ? 'Registrar mi plato' : asSnack ? 'Añadir picoteo' : 'Añadir alimento'}
+      subtitle={`${relativeDayLabel(date)} · ${asSnack ? 'Picoteo' : SLOT_META[slot].label}`}
       footer={
         view === 'dish' && (dish || editEntry) ? (
           <div className="flex gap-2">
@@ -166,6 +202,15 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
             <Button className="flex-1" onClick={saveDish} disabled={!validServings} data-confirm-log-dish>
               {editEntry ? 'Guardar cambios' : 'Registrar'}
             </Button>
+          </div>
+        ) : view === 'quick' ? (
+          <div className="flex gap-2">
+            {editEntry ? (
+              <Button variant="destructive" icon={<Trash2 size={18} />} onClick={() => { removeLog(editEntry); onClose(); }}>Eliminar</Button>
+            ) : (
+              <Button variant="secondary" icon={<ChevronLeft size={18} />} onClick={() => setView('list')}>Volver</Button>
+            )}
+            <Button className="flex-1" onClick={saveQuick} data-save-quick>{editEntry ? 'Guardar cambios' : 'Añadir'}</Button>
           </div>
         ) : view === 'amount' && food ? (
           <div className="flex gap-2">
@@ -217,6 +262,9 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
             )}
             <button type="button" onClick={() => setView('custom')} className={cx('press flex items-center gap-2 rounded-[14px] bg-surface2 px-3 py-3 text-left text-[14px] font-semibold hover:bg-line/50', !onOpenPhoto && 'col-span-2')}>
               <Plus size={18} className="text-accent" /> Crear alimento
+            </button>
+            <button type="button" onClick={() => { setQuickError(null); setView('quick'); }} className="press col-span-2 flex items-center gap-2 rounded-[14px] bg-surface2 px-3 py-2.5 text-left text-[14px] font-semibold hover:bg-line/50" data-quick-kcal>
+              <PencilLine size={18} className="text-accent" /> Calorías a mano <span className="font-normal text-ink3">· si no encuentras el alimento</span>
             </button>
           </div>
 
@@ -328,8 +376,9 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
             ))}
           </div>
 
-          <SelectField label="Comida" className="mt-4" value={slot} onChange={(e) => setSlot(e.target.value as MealSlot)}>
+          <SelectField label="Comida" className="mt-4" value={asSnack ? SNACK : slot} onChange={(e) => { if (e.target.value === SNACK) setAsSnack(true); else { setAsSnack(false); setSlot(e.target.value as MealSlot); } }} data-log-slot>
             {slots.map((s) => <option key={s} value={s}>{SLOT_META[s].label}</option>)}
+            <option value={SNACK}>Picoteo (fuera de las comidas)</option>
           </SelectField>
 
           <div className="mt-5">{preview ? <MacroGrid m={preview} /> : <p className="text-[14px] text-ink3">Introduce una cantidad válida para ver los valores.</p>}</div>
@@ -364,8 +413,9 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
               </button>
             ))}
           </div>
-          <SelectField label="Comida" className="mt-4" value={slot} onChange={(e) => setSlot(e.target.value as MealSlot)}>
+          <SelectField label="Comida" className="mt-4" value={asSnack ? SNACK : slot} onChange={(e) => { if (e.target.value === SNACK) setAsSnack(true); else { setAsSnack(false); setSlot(e.target.value as MealSlot); } }} data-log-slot>
             {slots.map((s) => <option key={s} value={s}>{SLOT_META[s].label}</option>)}
+            <option value={SNACK}>Picoteo (fuera de las comidas)</option>
           </SelectField>
           <div className="mt-5" data-dish-preview>{dishPreview ? <MacroGrid m={dishPreview} /> : <p className="text-[14px] text-ink3">Introduce las raciones para ver los valores.</p>}</div>
           <p className="mt-2 text-[12px] leading-snug text-ink3">
@@ -373,6 +423,24 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
               ? `Valores guardados al registrarlo${editEntry.snapshot ? ` (${new Date(editEntry.snapshot.at).toLocaleDateString('es-ES')})` : ''}: si editas el plato, este registro no cambia.`
               : 'Se guarda una copia de estos valores: si más adelante editas el plato, lo que ya registraste no cambia.'}
           </p>
+        </div>
+      )}
+
+      {view === 'quick' && (
+        <div className="anim-fade" data-quick-form>
+          <TextField label="¿Qué has comido?" value={quick.name} onChange={(e) => setQuick({ ...quick, name: e.target.value })} placeholder={asSnack ? 'Por ejemplo: patatas fritas del bar' : 'Por ejemplo: menú del día'} maxLength={60} data-quick-name />
+          <TextField className="mt-3" label="Calorías" inputMode="decimal" suffix="kcal" value={quick.kcal} onChange={(e) => { setQuick({ ...quick, kcal: e.target.value }); setQuickError(null); }} error={quickError} placeholder="Obligatorio" data-autofocus data-quick-kcal-input onKeyDown={(e) => e.key === 'Enter' && saveQuick()} />
+          <p className="mb-1.5 mt-4 text-[14px] font-semibold text-ink2">Macronutrientes <span className="font-normal text-ink3">(opcional)</span></p>
+          <div className="grid grid-cols-3 gap-2">
+            <TextField label="Proteínas" inputMode="decimal" suffix="g" value={quick.protein} onChange={(e) => setQuick({ ...quick, protein: e.target.value })} />
+            <TextField label="Hidratos" inputMode="decimal" suffix="g" value={quick.carbs} onChange={(e) => setQuick({ ...quick, carbs: e.target.value })} />
+            <TextField label="Grasas" inputMode="decimal" suffix="g" value={quick.fat} onChange={(e) => setQuick({ ...quick, fat: e.target.value })} />
+          </div>
+          <SelectField label="Comida" className="mt-4" value={asSnack ? SNACK : slot} onChange={(e) => { if (e.target.value === SNACK) setAsSnack(true); else { setAsSnack(false); setSlot(e.target.value as MealSlot); } }}>
+            {slots.map((s) => <option key={s} value={s}>{SLOT_META[s].label}</option>)}
+            <option value={SNACK}>Picoteo (fuera de las comidas)</option>
+          </SelectField>
+          <p className="mt-3 text-[12px] leading-snug text-ink3">Úsalo cuando sepas las calorías (de una etiqueta, una carta o una app) pero no esté el alimento. Si conoces el alimento, búscalo: sus valores salen de la base y son más fiables.</p>
         </div>
       )}
 

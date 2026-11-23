@@ -256,6 +256,13 @@ export interface FoodLogEntry {
   snapshot?: NutritionSnapshot;
   /** valores por 100 g/ml del alimento en el momento del registro (no cambian si se corrige la base) */
   per100?: Macros;
+  /**
+   * Picoteo: algo comido fuera de las comidas del día. Suma al día igual que cualquier registro,
+   * pero se muestra aparte (no en desayuno, comida…). `slot` guarda la comida más cercana por hora.
+   */
+  snack?: boolean;
+  /** registro «solo calorías» introducido a mano (sin alimento): los valores van en `snapshot` × amount (1) */
+  quick?: boolean;
   demo?: boolean;
 }
 
