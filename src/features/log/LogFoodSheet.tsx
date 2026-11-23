@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Camera, ChevronLeft, ChevronRight, Heart, PencilLine, Plus, Search, Trash2 } from 'lucide-react';
+import { Camera, ChevronLeft, ChevronRight, Heart, Plus, Search, Sparkles, Trash2 } from 'lucide-react';
 import type { Food, FoodLogEntry, ISODate, MealSlot, Recipe } from '../../types';
 import { Sheet } from '../../components/ui/Sheet';
-import { Badge, Button, IconButton, Segmented, SelectField, TextField, cx } from '../../components/ui/primitives';
+import { Badge, Button, Chip, IconButton, Segmented, SelectField, TextField, cx } from '../../components/ui/primitives';
 import { useData, useStore } from '../../store/AppStore';
 import { getFood, SLOT_META, slotsOrdered } from '../../services/catalog';
-import { foodMacros, recipeNutrition, scaleMacros } from '../../services/nutrition';
+import { addMacros, foodMacros, recipeNutrition, scaleMacros, ZERO } from '../../services/nutrition';
+import { buildIndex, parseMealText } from '../../services/mealText';
+import { BASE_FOODS, OFFICIAL_FOODS } from '../../data/foods';
+import { useFeedback } from '../../components/ui/Feedback';
 import { defaultQuantity, dishLogEntry, unitSize, userDishes } from '../../services/dishes';
 import { QuantityEditor, fmtQty, qtyFromBase, qtyToBase, type QtyValue } from '../meals/QuantityEditor';
 import { recipeMatches, recipeTitle } from '../../services/recipeMeta';
@@ -34,6 +37,13 @@ interface Props {
 }
 
 type Tab = 'buscar' | 'favoritos' | 'recientes' | 'platos';
+interface DescribedRow { text: string; food?: Food; recipe?: Recipe; amount: number; note: string; estimated: boolean; alternatives: Food[] }
+
+/** Cantidad de un alimento reconocido en el texto (mismo editor que en el resto de la app). */
+function DescribedQty({ food, amount, onChange }: { food: Food; amount: number; onChange: (g: number) => void }) {
+  const [v, setV] = useState<QtyValue>(() => qtyFromBase(food, amount, unitSize(food) && Math.abs((amount / unitSize(food)!) * 2 - Math.round((amount / unitSize(food)!) * 2)) < 0.04 ? 'unidad' : undefined));
+  return <QuantityEditor food={food} value={v} onChange={(n) => { setV(n); const b = qtyToBase(food, n); if (b !== null) onChange(b); }} />;
+}
 /** valor del selector de comida para «Picoteo» */
 const SNACK = '__picoteo';
 
@@ -41,8 +51,14 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
   const data = useData();
   const { mutate } = useStore();
   const { addLog, updateLog, removeLog } = useMealActions();
+  const { toast } = useFeedback();
 
-  const [view, setView] = useState<'list' | 'amount' | 'custom' | 'dish' | 'quick'>('list');
+  const [view, setView] = useState<'list' | 'amount' | 'custom' | 'dish' | 'quick' | 'describe'>('list');
+  // «¿Qué has comido?»: texto libre → alimentos de la base con su cantidad (valores calculados)
+  const [describeText, setDescribeText] = useState('');
+  const [parsed, setParsed] = useState<DescribedRow[]>([]);
+  const [openRow, setOpenRow] = useState<number | null>(null);
+  const [parsedOnce, setParsedOnce] = useState(false);
   // picoteo: fuera de las comidas; se puede pasar a una comida y al revés
   const [asSnack, setAsSnack] = useState(snack);
   const [quick, setQuick] = useState({ name: '', kcal: '', protein: '', carbs: '', fat: '' });
@@ -87,13 +103,19 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
     } else {
       setFood(null);
       setQuick({ name: '', kcal: '', protein: '', carbs: '', fat: '' });
-      setView('list');
+      // el picoteo empieza por describirlo: la app calcula los valores
+      setView(snack ? 'describe' : 'list');
+      setDescribeText('');
+      setParsed([]);
+      setParsedOnce(false);
+      setOpenRow(null);
     }
     setAmountError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editEntry?.id, initialDish?.id]);
 
   const local = useFoodSearch(data, query).local;
+  const describeIndex = useMemo(() => buildIndex({ base: BASE_FOODS, official: OFFICIAL_FOODS, custom: data.customFoods.filter((f) => !f.brand) }), [data.customFoods]);
   const favorites = useMemo(() => data.favorites.foods.map((id) => getFood(data, id)).filter((f): f is Food => !!f), [data]);
   const recents = useMemo(() => {
     const seen = new Set<string>();
@@ -172,6 +194,27 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
     onClose();
   };
 
+  const runDescribe = () => {
+    const rows = parseMealText(data, describeText, describeIndex);
+    setParsed(rows.map((r) => ({ text: r.text, food: r.food, recipe: r.recipe, amount: r.amount, note: r.amountNote, estimated: r.estimated, alternatives: r.alternatives })));
+    setParsedOnce(true);
+    setOpenRow(null);
+  };
+  const describedMacros = (r: DescribedRow) =>
+    r.food ? foodMacros(r.food, r.amount) : r.recipe ? scaleMacros(recipeNutrition(data, r.recipe).macros, r.amount) : null;
+  const describedOk = parsed.filter((r) => (r.food || r.recipe) && r.amount > 0);
+  const describedCount = describedOk.length;
+  const describedTotal = describedCount ? describedOk.reduce((a, r) => addMacros(a, describedMacros(r)!), ZERO) : null;
+  const saveDescribed = () => {
+    for (const r of describedOk) {
+      const extra = asSnack ? { snack: true } : {};
+      if (r.food) addLog({ date, slot, foodId: r.food.id, amount: r.amount, method: 'manual', ...extra }, true);
+      else if (r.recipe) addLog({ ...dishLogEntry(data, r.recipe, { date, slot, servings: r.amount }), ...extra }, true);
+    }
+    toast(`${describedCount === 1 ? 'Añadido' : `${describedCount} alimentos añadidos`} · ${n0(describedTotal?.kcal ?? 0)} kcal`);
+    onClose();
+  };
+
   const toggleFavFood = () =>
     food &&
     mutate((d) => {
@@ -186,8 +229,8 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
     <Sheet
       open={open}
       onClose={onClose}
-      fill={view === 'list'}
-      title={editEntry ? 'Editar registro' : view === 'custom' ? 'Alimento personalizado' : view === 'quick' ? 'Calorías a mano' : view === 'dish' ? 'Registrar mi plato' : asSnack ? 'Añadir picoteo' : 'Añadir alimento'}
+      fill={view === 'list' || view === 'describe'}
+      title={editEntry ? 'Editar registro' : view === 'custom' ? 'Alimento personalizado' : view === 'quick' ? 'Calorías a mano' : view === 'describe' ? (asSnack ? 'Añadir picoteo' : 'Describe lo que has comido') : view === 'dish' ? 'Registrar mi plato' : asSnack ? 'Añadir picoteo' : 'Añadir alimento'}
       subtitle={`${relativeDayLabel(date)} · ${asSnack ? 'Picoteo' : SLOT_META[slot].label}`}
       footer={
         view === 'dish' && (dish || editEntry) ? (
@@ -203,6 +246,10 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
               {editEntry ? 'Guardar cambios' : 'Registrar'}
             </Button>
           </div>
+        ) : view === 'describe' && describedCount > 0 ? (
+          <Button className="w-full" onClick={saveDescribed} data-save-described>
+            Añadir {describedCount === 1 ? '1 alimento' : `${describedCount} alimentos`} · {n0(describedTotal?.kcal ?? 0)} kcal
+          </Button>
         ) : view === 'quick' ? (
           <div className="flex gap-2">
             {editEntry ? (
@@ -263,8 +310,8 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
             <button type="button" onClick={() => setView('custom')} className={cx('press flex items-center gap-2 rounded-[14px] bg-surface2 px-3 py-3 text-left text-[14px] font-semibold hover:bg-line/50', !onOpenPhoto && 'col-span-2')}>
               <Plus size={18} className="text-accent" /> Crear alimento
             </button>
-            <button type="button" onClick={() => { setQuickError(null); setView('quick'); }} className="press col-span-2 flex items-center gap-2 rounded-[14px] bg-surface2 px-3 py-2.5 text-left text-[14px] font-semibold hover:bg-line/50" data-quick-kcal>
-              <PencilLine size={18} className="text-accent" /> Calorías a mano <span className="font-normal text-ink3">· si no encuentras el alimento</span>
+            <button type="button" onClick={() => setView('describe')} className="press col-span-2 flex items-center gap-2 rounded-[14px] bg-surface2 px-3 py-2.5 text-left text-[14px] font-semibold hover:bg-line/50" data-describe-open>
+              <Sparkles size={18} className="text-accent" /> Escribe lo que has comido <span className="font-normal text-ink3">· te calcula las calorías</span>
             </button>
           </div>
 
@@ -423,6 +470,76 @@ export function LogFoodSheet({ open, onClose, date, slot: initialSlot, editEntry
               ? `Valores guardados al registrarlo${editEntry.snapshot ? ` (${new Date(editEntry.snapshot.at).toLocaleDateString('es-ES')})` : ''}: si editas el plato, este registro no cambia.`
               : 'Se guarda una copia de estos valores: si más adelante editas el plato, lo que ya registraste no cambia.'}
           </p>
+        </div>
+      )}
+
+      {view === 'describe' && (
+        <div className="anim-fade" data-describe>
+          <label className="block">
+            <span className="mb-1.5 block text-[14px] font-semibold text-ink2">{asSnack ? '¿Qué has picado?' : '¿Qué has comido?'}</span>
+            <textarea
+              data-autofocus
+              value={describeText}
+              onChange={(e) => setDescribeText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runDescribe(); } }}
+              rows={2}
+              placeholder="Por ejemplo: un puñado de almendras y una cerveza"
+              className="w-full resize-none rounded-[12px] bg-surface2 px-3 py-2.5 text-[16px] leading-snug placeholder:text-ink3 focus:outline-none focus:ring-2 focus:ring-accent"
+              data-describe-input
+            />
+          </label>
+          <div className="mt-2 flex items-center gap-2">
+            <Button size="sm" onClick={runDescribe} disabled={!describeText.trim()} data-describe-run>Calcular</Button>
+            <button type="button" onClick={() => setView('list')} className="min-h-[36px] px-1 text-[14px] font-semibold text-accent">o busca un alimento</button>
+          </div>
+          {parsedOnce && parsed.length === 0 && <p className="mt-4 text-[14px] text-ink2">No he reconocido ningún alimento. Prueba con otras palabras o búscalo.</p>}
+          {parsed.length > 0 && (
+            <ul className="mt-4 divide-y divide-line/60 rounded-[16px] ring-1 ring-line/60" data-described>
+              {parsed.map((row, i) => {
+                const m = describedMacros(row);
+                const name = row.food?.name ?? (row.recipe ? recipeTitle(row.recipe) : row.text);
+                return (
+                  <li key={i} data-described-row>
+                    <div className="flex min-h-[52px] items-center gap-2 px-3 py-2">
+                      <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setOpenRow(openRow === i ? null : i)} disabled={!row.food && !row.recipe}>
+                        <span className="block truncate text-[15px] font-semibold">{row.food || row.recipe ? name : `«${row.text}»`}</span>
+                        <span className="tabular block text-[12px] text-ink3">
+                          {row.food ? `${row.note} · ${n0(row.amount)} ${row.food.unit}${row.estimated ? ' · cantidad estimada' : ''}` : row.recipe ? `${servingsLabel(row.amount)} · ${row.recipe.custom ? 'Mi plato' : 'receta'}` : 'No encontrado'}
+                        </span>
+                      </button>
+                      {m ? <span className="tabular shrink-0 text-[15px] font-semibold" data-described-kcal>{n0(m.kcal)} kcal</span> : (
+                        <button type="button" className="shrink-0 text-[13px] font-semibold text-accent" onClick={() => { setQuery(row.text); setTab('buscar'); setView('list'); }}>Buscar</button>
+                      )}
+                      <IconButton label={`Quitar ${name}`} onClick={() => setParsed((ps) => ps.filter((_, j) => j !== i))} className="!h-9 !w-9 text-ink3"><Trash2 size={16} /></IconButton>
+                    </div>
+                    {openRow === i && row.food && (
+                      <div className="border-t border-line/60 px-3 pb-3 pt-2">
+                        <DescribedQty key={row.food.id} food={row.food} amount={row.amount} onChange={(a) => setParsed((ps) => ps.map((p, j) => (j === i ? { ...p, amount: a, note: 'cantidad ajustada', estimated: false } : p)))} />
+                        {row.alternatives.length > 0 && (
+                          <>
+                            <p className="mb-1 mt-3 text-[12px] font-semibold uppercase tracking-wide text-ink3">¿Era otro?</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {row.alternatives.map((f) => (
+                                <Chip key={f.id} selected={false} onClick={() => setParsed((ps) => ps.map((p, j) => (j === i ? { ...p, food: f, alternatives: [p.food!, ...p.alternatives.filter((x) => x.id !== f.id)] } : p)))}>{f.name}</Chip>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {describedTotal && (
+            <div className="mt-3" data-described-total><MacroGrid m={describedTotal} /></div>
+          )}
+          {parsed.length > 0 && <p className="mt-2 text-[12px] leading-snug text-ink3">Las calorías salen de los valores por 100 g de cada alimento en la base (BEDCA/USDA). Si no dices la cantidad se usa una ración habitual: toca un alimento para ajustarla o cambiarlo.</p>}
+          <SelectField label="Comida" className="mt-4" value={asSnack ? SNACK : slot} onChange={(e) => { if (e.target.value === SNACK) setAsSnack(true); else { setAsSnack(false); setSlot(e.target.value as MealSlot); } }}>
+            {slots.map((s) => <option key={s} value={s}>{SLOT_META[s].label}</option>)}
+            <option value={SNACK}>Picoteo (fuera de las comidas)</option>
+          </SelectField>
         </div>
       )}
 

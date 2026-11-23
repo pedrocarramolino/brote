@@ -10,6 +10,8 @@ import { AIError } from '../../services/ai';
 import { allFoods, allRecipes, getFood, SLOT_META } from '../../services/catalog';
 import { foodMacros } from '../../services/nutrition';
 import { n0, normalize, parseDecimal, uid } from '../../lib/format';
+import { buildIndex, parseMealText } from '../../services/mealText';
+import { BASE_FOODS, OFFICIAL_FOODS } from '../../data/foods';
 import { relativeDayLabel } from '../../lib/dates';
 import { useMealActions } from '../meals/useMealActions';
 
@@ -105,8 +107,11 @@ export function PhotoLogSheet({ open, onClose, date, slot }: { open: boolean; on
   const analyze = async () => {
     setError(null);
     if (!isAI) {
-      const matches = keywordMatches(text, allFoods(data), allRecipes(data), (id) => getFood(data, id));
-      setItems(matches.map((f) => ({ key: f.id, food: f, amount: String(f.portion?.amount ?? 100), selected: true, origin: 'coincidencia' })));
+      // sin IA: se interpreta el texto con la base de alimentos (alimento + cantidad casera)
+      const idx = buildIndex({ base: BASE_FOODS, official: OFFICIAL_FOODS, custom: data.customFoods.filter((f) => !f.brand) });
+      const parsed = parseMealText(data, text, idx).filter((p) => p.food);
+      const matches = parsed.length ? parsed.map((p) => ({ f: p.food!, amount: p.amount })) : keywordMatches(text, allFoods(data), allRecipes(data), (id) => getFood(data, id)).map((f) => ({ f, amount: f.portion?.amount ?? 100 }));
+      setItems(matches.map(({ f, amount }, i) => ({ key: `${f.id}-${i}`, food: f, amount: String(Math.round(amount)), selected: true, origin: 'coincidencia' })));
       setResultMode('demo');
       setPhase('results');
       return;
@@ -177,7 +182,7 @@ export function PhotoLogSheet({ open, onClose, date, slot }: { open: boolean; on
           ? 'Comprobando el servicio de análisis…'
           : isAI
             ? 'La foto y la descripción se enviarán al servidor del asistente para obtener una estimación. Revisa y corrige las cantidades antes de guardar.'
-            : 'Modo demostración: no hay un servicio de IA conectado, así que la foto no se analiza. Se buscarán alimentos cuyo nombre aparezca en tu descripción para que los confirmes tú.'}
+            : 'Modo demostración: no hay un servicio de IA conectado, así que la foto no se analiza. Se reconocerán los alimentos y cantidades de tu descripción («un puñado de almendras y una cerveza») con la base de alimentos, para que los confirmes tú.'}
       </div>
 
       {(phase === 'input' || phase === 'error') && (
